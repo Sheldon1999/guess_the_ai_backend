@@ -17,7 +17,7 @@ function normalizeHash(h) {
   if (!h) return null;
   const s = String(h).trim().toLowerCase();
   const with0x = s.startsWith("0x") ? s : "0x" + s;
-  return /^0x[0-9a-f]+$/.test(with0x) ? with0x : null;
+  return /^0x[0-9a-z]+$/.test(with0x) ? with0x : null;
 }
 
 function loadHashes(filePath) {

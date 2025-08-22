@@ -31,7 +31,7 @@ function mkWallet(i) {
   // WALLET_PREFIX should be 41 chars incl "0x" + 39 hex so we can append one nibble.
   // If not, just fall back to u<i> style addresses (still hex-like).
   let w = `${WALLET_PREFIX}${(i % 16).toString(16)}`;
-  if (!/^0x[0-9a-f]{40}$/i.test(w)) {
+  if (!/^0x[0-9a-z]{40}$/i.test(w)) {
     const pad = String(i).padStart(38, "0");
     w = `0x${pad}aa`; // valid hex of 40 chars
   }

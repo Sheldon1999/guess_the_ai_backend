@@ -9,7 +9,7 @@ export default function authRoutes(app) {
   app.post("/auth/connect", async (req, res) => {
     const walletAddress = normalizeWallet(req.body?.walletAddress);
     const username = String(req.body?.username || "").trim(); // optional
-    if (!/^0x[0-9a-f]{40}$/.test(walletAddress)) {
+    if (!/^0x[0-9a-z]{40}$/.test(walletAddress)) {
       return res.status(400).json({ error: "invalid walletAddress" });
     }
     const now = new Date();

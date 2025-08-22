@@ -115,7 +115,7 @@ export default function adminRoutes(app) {
     const label = String(req.body?.label || "")
       .trim()
       .toLowerCase();
-    if (!/^0x[0-9a-f]+$/.test(hash))
+    if (!/^0x[0-9a-z]+$/.test(hash))
       return res.status(400).json({ error: "invalid hash" });
     if (label !== "ai" && label !== "human")
       return res.status(400).json({ error: "label must be 'ai' or 'human'" });
@@ -139,7 +139,7 @@ export default function adminRoutes(app) {
       const label = String(it?.label || "")
         .trim()
         .toLowerCase();
-      if (!/^0x[0-9a-f]+$/.test(hash)) continue;
+      if (!/^0x[0-9a-z]+$/.test(hash)) continue;
       if (label !== "ai" && label !== "human") continue;
       ops.push({
         updateOne: {

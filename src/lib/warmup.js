@@ -10,7 +10,7 @@ const CONC = Math.max(Number(process.env.WARMER_CONCURRENCY || 8), 1);
 
 function isHashName(name) {
   // filenames are the root-hash (e.g., 0xabc...); store only exact hash files.
-  return /^0x[0-9a-f]+$/i.test(name);
+  return /^0x[0-9a-z]+$/i.test(name);
 }
 
 export async function scanCacheDir() {
@@ -105,11 +105,12 @@ export async function warmOnBoot() {
 
 // Optional periodic top-up (returns a stop function)
 export function startBackgroundTopup() {
+  console.log("Backgroung topup started..");
   const periodSec = Number(process.env.PREFETCH_INTERVAL_SEC || 0);
   const target = Number(process.env.PREFETCH_TARGET || 0);
-  if (!periodSec || !target) return () => {};
+  if (!periodSec || !target) return () => { console.log("Background topup not running."); };
   const id = setInterval(async () => {
-    try { await ensureMinReady(target); } catch (e) { console.error("topup tick:", e.message); }
+    try { const result = await ensureMinReady(target); console.log(`[topup] Success:`, result); } catch (e) { console.log("[topup] failed:"); }
   }, periodSec * 1000);
   return () => clearInterval(id);
 }
