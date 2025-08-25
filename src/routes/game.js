@@ -89,44 +89,59 @@ export default function gameRoutes(app) {
     if (!/^0x[0-9a-z]{40}$/.test(wallet))
       return res.status(400).json({ error: "walletAddress required" });
 
+    const expiry = Number(process.env.ACTIVE_USER_EXPIRY_SEC) || 600;
+    await redis.sadd("active:users", wallet);
+    await redis.expire("active:users", expiry);
+
     const MAX_ATTEMPTS = 30;
 
-    const result = await withUserLock(wallet, async () => {
-      for (let i = 0; i < MAX_ATTEMPTS; i++) {
-        const hash = await redis.lpop("ready:q");
-        if (!hash) return { status: 204, body: null };
+     // Extracted function for image selection
+    async function pickEligibleImage() {
+      return withUserLock(wallet, async () => {
+        for (let i = 0; i < MAX_ATTEMPTS; i++) {
+          const hash = await redis.lpop("ready:q");
+          if (!hash) return { status: 204, body: null };
 
-        const imageId = await getOrCreateImageIdByHash(hash);
-        const okUser = await isEligibleForUser(wallet, imageId);
-        const okGlobal = await isEligibleGlobal(imageId);
+          const imageId = await getOrCreateImageIdByHash(hash);
+          const okUser = await isEligibleForUser(wallet, imageId);
+          const okGlobal = await isEligibleGlobal(imageId);
 
-        if (okUser && okGlobal) {
-          await redis.rpush("ready:q", hash); // keep in rotation
-          await recordExposure(wallet, imageId, hash);
-          await recordGlobal(imageId);
+          if (okUser && okGlobal) {
+            await redis.rpush("ready:q", hash); // keep in rotation
+            await recordExposure(wallet, imageId, hash);
+            await recordGlobal(imageId);
 
-          // >>> add this <<<
-          const expiresAt =
-            GLOBAL_SECS > 0 ? new Date(Date.now() + GLOBAL_SECS * 1000) : null;
-          await images.updateOne(
-            { _id: imageId },
-            { $set: { expiresAt, lastShownAt: new Date() } }
-          );
+            const expiresAt =
+              GLOBAL_SECS > 0 ? new Date(Date.now() + GLOBAL_SECS * 1000) : null;
+            await images.updateOne(
+              { _id: imageId },
+              { $set: { expiresAt, lastShownAt: new Date() } }
+            );
 
-          return {
-            status: 200,
-            body: {
-              imageId: String(imageId),
-              hash,
-              url: `/img/h/${encodeURIComponent(hash)}`,
-            },
-          };
-        } else {
-          await redis.rpush("ready:q", hash);
+            return {
+              status: 200,
+              body: {
+                imageId: String(imageId),
+                hash,
+                url: `/img/h/${encodeURIComponent(hash)}`,
+              },
+            };
+          } else {
+            await redis.rpush("ready:q", hash);
+          }
         }
-      }
-      return { status: 204, body: null };
-    });
+        return { status: 204, body: null };
+      });
+    }
+
+    // First attempt
+    let result = await pickEligibleImage();
+
+    // If no eligible image, clear user cooldowns and try again
+    if (result.status === 204) {
+      await redis.del(`recent:${wallet}`);
+      result = await pickEligibleImage();
+    }
 
     if (result.status === 200) return res.json(result.body);
     if (result.status === 204) return res.status(204).send();
