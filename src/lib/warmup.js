@@ -104,10 +104,14 @@ export async function warmOnBoot() {
 }
 
 // Optional periodic top-up (returns a stop function)
-export function startBackgroundTopup() {
+export async function startBackgroundTopup() {
   console.log("Backgroung topup started..");
   const periodSec = Number(process.env.PREFETCH_INTERVAL_SEC || 0);
-  const target = Number(process.env.PREFETCH_TARGET || 0);
+  // const target = Number(process.env.PREFETCH_TARGET || 0);
+  const perUserImages = Number(process.env.PER_USER_IMAGES) || 50;
+  const activeUsers = await redis.scard("active:users");
+  const multiplier = Math.max(10, activeUsers);
+  const target = multiplier * perUserImages;
   if (!periodSec || !target) return () => { console.log("Background topup not running."); };
   const id = setInterval(async () => {
     try { const result = await ensureMinReady(target); console.log(`[topup] Success:`, result); } catch (e) { console.log("[topup] failed:"); }
