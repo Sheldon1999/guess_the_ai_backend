@@ -110,8 +110,8 @@ export const generateAuthToken = async (user) => {
   // Create token with user data
   const token = await signToken(
     {
-      id: user._id,
-      walletAddress: user.walletAddress,
+      _id: user._id,
+      walletAddress: user.wallet,
       username: user.username,
       role: user.role || 'user',
       // Add any other user data you want to include

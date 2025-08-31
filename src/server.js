@@ -40,4 +40,5 @@ await warmOnBoot().then(r => console.log("warmup:", r)).catch(e => console.error
 const stopTopup = await startBackgroundTopup();
 
 const port = Number(process.env.PORT || 3000);
+console.log("MY PORT IS ",port);
 app.listen(port, () => console.log(`server: http://localhost:${port}`));

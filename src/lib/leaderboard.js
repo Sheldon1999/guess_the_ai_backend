@@ -14,6 +14,7 @@ export function currentWeekKey(d = new Date()) {
 export async function bumpAllTime(wallet, delta = 1) {
   return redis.zincrby("lb:alltime", delta, wallet);
 }
+
 export async function bumpWeekly(wallet, delta = 1, when = new Date()) {
   const key = `lb:week:${currentWeekKey(when)}`;
   return redis.zincrby(key, delta, wallet);
