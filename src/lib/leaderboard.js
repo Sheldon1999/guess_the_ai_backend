@@ -47,11 +47,17 @@ async function hydrateUsers(wallets) {
 }
 
 export async function topAllTime(limit = 50, offset = 0) {
-  const raw = await redis.zrevrange("lb:alltime", offset, offset + limit - 1, "WITHSCORES");
-  const wallets = []; const scores = [];
-  for (let i = 0; i < raw.length; i += 2) { wallets.push(raw[i]); scores.push(Number(raw[i + 1])); }
-  const entries = await hydrateUsers(wallets);
-  return entries.map((e, i) => ({ ...e, score: scores[i] || 0, rankPos: offset + i + 1 }));
+
+    try {
+      const leaderboard = await users.find().sort({ correctAnswers: -1 }).limit(limit).skip(offset).toArray();
+      return ({success:true,leaderboard});
+    }
+    catch(error) {
+      return ({
+        success: false,
+        message: 'Something went wrong'
+    })
+    }
 }
 
 export async function topWeekly(weekKey, limit = 50, offset = 0) {
