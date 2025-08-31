@@ -177,11 +177,10 @@ export default function gameRoutes(app) {
         
         // Rest of your existing code remains the same...
         await users.updateOne(
-          { _id: wallet },
+          { walletAddress },
           {
             $setOnInsert: {
-              _id: wallet,
-              username: wallet.slice(0, 8),
+              walletAddress,
               correctAnswers: 0,
               currentStreak: 0,
               streak: 0,
@@ -208,7 +207,7 @@ export default function gameRoutes(app) {
         const correct = guess === truth;
   
         const udoc = await users.findOne(
-          { _id: wallet },
+          { walletAddress },
           { projection: { correctAnswers: 1, currentStreak: 1, streak: 1 } }
         );
         let correctAnswers = udoc?.correctAnswers || 0;
@@ -227,7 +226,7 @@ export default function gameRoutes(app) {
         const dungeonTitle = titleFromStreak(streak);
   
         await users.updateOne(
-          { _id: wallet },
+          { walletAddress },
           {
             $set: {
               correctAnswers,
