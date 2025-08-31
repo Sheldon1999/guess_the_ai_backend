@@ -255,7 +255,7 @@ export default function gameRoutes(app) {
         });
   
         const profile = await users.findOne(
-          { _id: wallet },
+          { walletAddress: wallet },
           {
             projection: {
               _id: 1,
