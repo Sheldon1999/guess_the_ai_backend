@@ -51,10 +51,11 @@ export default function userRoutes(app) {
       else {
         username = isAccountExisted?.username;
       }
+      let nameUpdated = isAccountExisted?.nameUpdated ?? false;
       // Generate JWT token with just the wallet address
-      const token = await generateAuthToken({ _id: walletAddress, wallet:walletAddress,username });
+      const token = await generateAuthToken({ _id: walletAddress, wallet:walletAddress,username});
   
-      return res.json({ success: true, data: { token, username } });
+      return res.json({ success: true, data: { token, username,  nameUpdated: nameUpdated  } });
     } catch (e) {
       console.error("user/login error:", e);
       return res.status(500).json({ success: false, message: "internal error" });
