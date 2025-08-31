@@ -91,7 +91,7 @@ export default function gameRoutes(app) {
     async (req, res) => {
       try {
         // Get wallet from authenticated user's JWT
-        const wallet = req.user._id;
+        const wallet = req.user.walletAddress;
         
         const expiry = Number(process.env.ACTIVE_USER_EXPIRY_SEC) || 600;
         await redis.sadd("active:users", wallet);
@@ -101,7 +101,7 @@ export default function gameRoutes(app) {
   
         // Extracted function for image selection
         async function pickEligibleImage() {
-          return withUserLock(wallet, async () => {
+          // return withUserLock(wallet, async () => {
             for (let i = 0; i < MAX_ATTEMPTS; i++) {
               const hash = await redis.lpop("ready:q");
               if (!hash) return { status: 204, body: null };
@@ -134,14 +134,11 @@ export default function gameRoutes(app) {
                 await redis.rpush("ready:q", hash);
               }
             }
-            return { status: 204, body: null };
-          });
         }
   
         // First attempt
         let result = await pickEligibleImage();
   
-        // If no eligible image, clear user cooldowns and try again
         if (result.status === 204) {
           await redis.del(`recent:${wallet}`);
           result = await pickEligibleImage();
@@ -164,7 +161,7 @@ export default function gameRoutes(app) {
     async (req, res) => {
       try {
         // Get wallet from authenticated user's JWT
-        const wallet = req.user._id;
+        const wallet = req.user.walletAddress;
         const hash = String(req.body?.hash || "").trim();
         const guess = normalizeGuess(req.body?.guess);
   
@@ -177,10 +174,10 @@ export default function gameRoutes(app) {
         
         // Rest of your existing code remains the same...
         await users.updateOne(
-          { walletAddress },
+          { walletAddress: wallet },
           {
             $setOnInsert: {
-              walletAddress,
+              walletAddress: wallet,
               correctAnswers: 0,
               currentStreak: 0,
               streak: 0,
@@ -207,7 +204,7 @@ export default function gameRoutes(app) {
         const correct = guess === truth;
   
         const udoc = await users.findOne(
-          { walletAddress },
+          { walletAddress: wallet },
           { projection: { correctAnswers: 1, currentStreak: 1, streak: 1 } }
         );
         let correctAnswers = udoc?.correctAnswers || 0;
@@ -226,7 +223,7 @@ export default function gameRoutes(app) {
         const dungeonTitle = titleFromStreak(streak);
   
         await users.updateOne(
-          { walletAddress },
+          { walletAddress:wallet },
           {
             $set: {
               correctAnswers,
