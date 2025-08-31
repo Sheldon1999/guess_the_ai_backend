@@ -85,13 +85,85 @@ async function getOrCreateImageIdByHash(hash) {
 }
 
 export default function gameRoutes(app) {
+  // app.post(
+  //   "/game/next", 
+  //   protect,  // Add JWT authentication middleware
+  //   async (req, res) => {
+  //     try {
+  //       console.log("step 1")
+  //       // Get wallet from authenticated user's JWT
+  //       const wallet = req.user.walletAddress;
+        
+  //       const expiry = Number(process.env.ACTIVE_USER_EXPIRY_SEC) || 600;
+  //       await redis.sadd("active:users", wallet);
+  //       await redis.expire("active:users", expiry);
+  
+  //       console.log("step 2")
+  //       const MAX_ATTEMPTS = 30;
+  
+  //       console.log("setp 3")
+  //       // Extracted function for image selection
+  //       async function pickEligibleImage() {
+  //         // return withUserLock(wallet, async () => {
+  //           console.log("Step 4")
+  //           for (let i = 0; i < MAX_ATTEMPTS; i++) {
+  //             console.log("Step 5")
+  //             const hash = await redis.lpop("ready:q");
+  //             if (!hash) return { status: 204, body: null };
+  
+  //             const imageId = await getOrCreateImageIdByHash(hash);
+  //             const okUser = await isEligibleForUser(wallet, imageId);
+  //             const okGlobal = await isEligibleGlobal(imageId);
+  
+  //             if (okUser && okGlobal) {
+  //               await redis.rpush("ready:q", hash); // keep in rotation
+  //               await recordExposure(wallet, imageId, hash);
+  //               await recordGlobal(imageId);
+  
+  //               const expiresAt =
+  //                 GLOBAL_SECS > 0 ? new Date(Date.now() + GLOBAL_SECS * 1000) : null;
+  //               await images.updateOne(
+  //                 { _id: imageId },
+  //                 { $set: { expiresAt, lastShownAt: new Date() } }
+  //               );
+  
+  //               return {
+  //                 status: 200,
+  //                 body: {
+  //                   imageId: String(imageId),
+  //                   hash,
+  //                   url: `/img/h/${encodeURIComponent(hash)}`,
+  //                 },
+  //               };
+  //             } else {
+  //               await redis.rpush("ready:q", hash);
+  //             }
+  //           }
+  //       }
+  //       console.log("step 6")
+  //       // First attempt
+  //       let result = await pickEligibleImage();
+  //       console.log("step 7")
+  //       // if (result.status === 204) {
+  //       console.log("My wallet Address ",wallet);
+  //       redis.del(`recent:${wallet}`)
+  //       // await redis.del(`recent:${wallet}`);
+  //       result = await pickEligibleImage();
+  //       return res.status(500).json({ error: "unexpected" });
+  //     } catch (error) {
+  //       console.error("game/next error:", error);
+  //       return res.status(500).json({ error: "internal server error" });
+  //     }
+  //   }
+  // );
+
   app.post(
     "/game/next", 
     protect,  // Add JWT authentication middleware
     async (req, res) => {
       try {
         // Get wallet from authenticated user's JWT
-        const wallet = req.user.walletAddress;
+        const wallet = req.user._id;
         
         const expiry = Number(process.env.ACTIVE_USER_EXPIRY_SEC) || 600;
         await redis.sadd("active:users", wallet);
@@ -101,16 +173,21 @@ export default function gameRoutes(app) {
   
         // Extracted function for image selection
         async function pickEligibleImage() {
-          // return withUserLock(wallet, async () => {
+          console.log('picking eligible image');
             for (let i = 0; i < MAX_ATTEMPTS; i++) {
               const hash = await redis.lpop("ready:q");
-              if (!hash) return { status: 204, body: null };
+              // console.log("My Hash is ",hash);
+              if (!hash){
+                continue;
+              //   console.log(">>>>>> NOT FOUND Image")
+              //   return { status: 204, body: null };
+              } 
   
               const imageId = await getOrCreateImageIdByHash(hash);
               const okUser = await isEligibleForUser(wallet, imageId);
-              const okGlobal = await isEligibleGlobal(imageId);
+              // const okGlobal = await isEligibleGlobal(imageId);
   
-              if (okUser && okGlobal) {
+              if (okUser) {
                 await redis.rpush("ready:q", hash); // keep in rotation
                 await recordExposure(wallet, imageId, hash);
                 await recordGlobal(imageId);
@@ -134,13 +211,18 @@ export default function gameRoutes(app) {
                 await redis.rpush("ready:q", hash);
               }
             }
+            return { status: 204, body: null };
         }
   
         // First attempt
         let result = await pickEligibleImage();
   
+        // If no eligible image, clear user cooldowns and try again
         if (result.status === 204) {
           await redis.del(`recent:${wallet}`);
+          let key = await redis.get(`recent:${wallet}`);
+          console.log("key value is ",key)
+          console.log('about to call it again');
           result = await pickEligibleImage();
         }
   
