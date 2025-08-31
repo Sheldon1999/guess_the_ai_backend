@@ -16,7 +16,7 @@ export default function userRoutes(app) {
     try {
       const walletAddress = normalizeWallet(req.body?.walletAddress);
   
-      if (!WALLET_RE.test(walletAddress)) {
+      if (!walletAddress) {
         return res.status(400).json({ success: false, message: "invalid walletAddress" });
       }
   
@@ -26,7 +26,7 @@ export default function userRoutes(app) {
       const username = `Player_${userCount + 1}`;
   
       const setOnInsert = {
-        _id: walletAddress,
+        walletAddress,
         correctAnswers: 0,
         currentStreak: 0,
         streak: 0,
@@ -41,7 +41,7 @@ export default function userRoutes(app) {
       };
   
       await users.updateOne(
-        { _id: walletAddress },
+        { walletAddress },
         { $setOnInsert: setOnInsert, $set: set },
         { upsert: true }
       );
@@ -92,7 +92,7 @@ export default function userRoutes(app) {
     
           updates.updatedAt = new Date();
           const result = await users.updateOne(
-            { _id: walletAddress }, 
+            { walletAddress }, 
             { $set: updates }
           );
           
@@ -105,7 +105,7 @@ export default function userRoutes(app) {
     
           // Return updated user data
           const updatedUser = await users.findOne(
-            { _id: walletAddress },
+            { walletAddress },
             {
               projection: {
                 _id: 1, 
@@ -145,7 +145,7 @@ export default function userRoutes(app) {
         const walletAddress = req.user._id;
         
         const profile = await users.findOne(
-          { _id: walletAddress },
+          { walletAddress },
           {
             projection: {
               _id: 1, 
