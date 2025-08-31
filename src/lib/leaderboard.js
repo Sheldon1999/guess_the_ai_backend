@@ -21,8 +21,20 @@ export async function bumpWeekly(wallet, delta = 1, when = new Date()) {
 
 async function hydrateUsers(wallets) {
   if (!wallets.length) return [];
-  const docs = await users.find({ _id: { $in: wallets } }, { projection: { _id: 1, username: 1, rank: 1, dungeonTitle: 1, correctAnswers: 1, streak: 1 } }).toArray();
-  const map = new Map(docs.map(d => [d._id, d]));
+  const docs = await users.find(
+    { walletAddress: { $in: wallets } }, 
+    { 
+      projection: { 
+        walletAddress: 1, 
+        username: 1, 
+        rank: 1, 
+        dungeonTitle: 1, 
+        correctAnswers: 1, 
+        streak: 1 
+      } 
+    }
+  ).toArray();
+  const map = new Map(docs.map(d => [d.walletAddress, d]));
   return wallets.map(w => ({
     walletAddress: w,
     username: map.get(w)?.username || w.slice(0, 8),
