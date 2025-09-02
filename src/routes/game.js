@@ -158,7 +158,7 @@ export default function gameRoutes(app) {
   // );
 
   app.post(
-    "/game/next", 
+    "/api/game/next", 
     protect,  // Add JWT authentication middleware
     async (req, res) => {
       try {
@@ -238,7 +238,7 @@ export default function gameRoutes(app) {
   );
 
   app.post(
-    "/game/answer", 
+    "/api/game/answer", 
     protect,  // Add JWT authentication middleware
     async (req, res) => {
       try {

@@ -8,7 +8,7 @@ const READ_MS = Number(process.env.HTTP_READ_TIMEOUT_MS || 15000);
 const MAX_BYTES = Number(process.env.HTTP_MAX_CONTENT_BYTES || 5 * 1024 * 1024);
 
 export default function imageRoutes(app) {
-  app.get("/img/h/:hash", async (req, res) => {
+  app.get("/api/img/h/:hash", async (req, res) => {
     const raw = req.params?.hash || req.query?.hash || req.originalUrl.split("/").pop();
     const hash = (raw || "").trim();
     const filePath = path.join(CACHE_DIR, hash);

@@ -12,7 +12,7 @@ const WALLET_RE = /^0x[0-9a-z]{40}$/i;
 export default function userRoutes(app) {
 
   // REGISTER (create or update username if exists)
-  app.post("/user/login", async (req, res) => {
+  app.post("/api/user/login", async (req, res) => {
     try {
       const walletAddress = normalizeWallet(req.body?.walletAddress);
   
@@ -64,7 +64,7 @@ export default function userRoutes(app) {
 
     // PATCH (username only)
   app.put(
-    "/user/updateUsername", 
+    "/api/user/updateUsername", 
     protect,  // This will validate the JWT
     async (req, res) => {
       try {
@@ -142,7 +142,7 @@ export default function userRoutes(app) {
 
   // GET PROFILE
   app.get(
-    "/user/profile",
+    "/api/user/profile",
     protect,  // JWT authentication middleware
     async (req, res) => {
       try {
