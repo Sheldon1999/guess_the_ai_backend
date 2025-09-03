@@ -204,7 +204,7 @@ export default function gameRoutes(app) {
                   body: {
                     imageId: String(imageId),
                     hash,
-                    url: `/img/h/${encodeURIComponent(hash)}`,
+                    url: `/api/img/h/${encodeURIComponent(hash)}`,
                   },
                 };
               } else {

@@ -19,17 +19,18 @@ import { warmOnBoot, startBackgroundTopup } from "./lib/warmup.js";
 
 const app = express();
 app.use(express.json({ limit: "1mb" }));
-app.use(cors())
-app.use(pino());
+app.options("*", cors());
+//app.use(pino());
 
 const cacheDir = process.env.CACHE_DIR || "./cache/orig";
 fs.mkdirSync(cacheDir, { recursive: true });
 
 // Routes
+userRoutes(app);
 health(app);
 imageRoutes(app);
 adminRoutes(app);
-userRoutes(app);
+// userRoutes(app);
 gameRoutes(app);
 authRoutes(app);
 leaderboardRoutes(app);
