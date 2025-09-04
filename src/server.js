@@ -19,7 +19,19 @@ import { warmOnBoot, startBackgroundTopup } from "./lib/warmup.js";
 
 const app = express();
 app.use(express.json({ limit: "1mb" }));
-app.options("*", cors());
+
+app.use(cors({
+  origin: [
+    "https://guesstheai.xyz",
+    "http://localhost:5172",
+    "http://localhost:5173",
+    "http://localhost:5174"
+  ],
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  credentials: true
+}));
+
+
 //app.use(pino());
 
 const cacheDir = process.env.CACHE_DIR || "./cache/orig";
