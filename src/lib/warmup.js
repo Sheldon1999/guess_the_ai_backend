@@ -110,6 +110,7 @@ export async function startBackgroundTopup() {
   // const target = Number(process.env.PREFETCH_TARGET || 0);
   const perUserImages = Number(process.env.PER_USER_IMAGES) || 50;
   const activeUsers = await redis.scard("active:users");
+  console.log("active users::", activeUsers);
   const multiplier = Math.max(10, activeUsers);
   const target = multiplier * perUserImages;
   if (!periodSec || !target) return () => { console.log("Background topup not running."); };
