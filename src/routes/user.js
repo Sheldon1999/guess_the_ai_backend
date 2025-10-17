@@ -1,4 +1,5 @@
-import { users } from "../lib/mongo.js";
+// src/routes/user
+import { users, dailyLogins } from "../lib/mongo.js";
 import { generateAuthToken } from "../middleware/jwt.js";
 import { protect } from "../middleware/jwt.js";
 
@@ -52,6 +53,25 @@ export default function userRoutes(app) {
         username = isAccountExisted?.username;
       }
       let nameUpdated = isAccountExisted?.nameUpdated ?? false;
+
+      const loginDay = new Date();
+      const dayStart = new Date(Date.UTC(
+        loginDay.getUTCFullYear(),
+        loginDay.getUTCMonth(),
+        loginDay.getUTCDate()
+      ));
+
+      await dailyLogins.updateOne(
+        { walletAddress, day: dayStart },
+        {
+          $setOnInsert: {
+            walletAddress,
+            day: dayStart,
+          },
+        },
+        { upsert: true }
+      );
+
       // Generate JWT token with just the wallet address
       const token = await generateAuthToken({ _id: walletAddress, wallet:walletAddress,username});
   

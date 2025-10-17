@@ -32,6 +32,19 @@ async function fetchHTTPToBuffer(hash) {
   const contentLen = lenHeader ? Number(lenHeader) : 0;
   if (contentLen && contentLen > MAX_BYTES) throw new Error(`http too large: ${contentLen} > ${MAX_BYTES}`);
 
+  const type = resp.headers.get("content-type") || "";
+  if (type.includes("application/json")) {
+    const text = await resp.clone().text();        // clone so arrayBuffer still works if needed
+    try {
+      const json = JSON.parse(text);
+      if (json?.code === 101) {
+        throw new Error(`http upstream file missing (${hash})`);
+      }
+    } catch (_) { }
+    throw new Error(`http returned JSON instead of file: ${text.slice(0, 200)}`);
+  }
+
+
   const ab = await resp.arrayBuffer();
   const buf = Buffer.from(ab);
   if (buf.length > MAX_BYTES) throw new Error(`http too large after read: ${buf.length} > ${MAX_BYTES}`);
@@ -69,7 +82,7 @@ export async function fetchToDisk(hash, destPath) {
   try {
     await fs.promises.access(destPath, fs.constants.R_OK);
     return { existed: true, mode: "CACHE" };
-  } catch (_) {}
+  } catch (_) { }
 
   const tmp = `${destPath}.part`;
   await fs.promises.mkdir(path.dirname(destPath), { recursive: true });
