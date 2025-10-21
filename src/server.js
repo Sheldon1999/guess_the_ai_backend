@@ -21,13 +21,22 @@ import { attachPresenceWS } from "./ws/presence.js";
 const app = express();
 app.use(express.json({ limit: "1mb" }));
 
+const defaultAllowedOrigins = [
+  "https://guesstheai.xyz",
+  "http://localhost:5172",
+  "http://localhost:5173",
+  "http://localhost:5174"
+];
+
+const envOrigins = (process.env.CORS_ALLOWED_ORIGINS || "")
+  .split(",")
+  .map(origin => origin.trim())
+  .filter(Boolean);
+
+const allowedOrigins = envOrigins.length > 0 ? envOrigins : defaultAllowedOrigins;
+
 app.use(cors({
-  origin: [
-    "https://guesstheai.xyz",
-    "http://localhost:5172",
-    "http://localhost:5173",
-    "http://localhost:5174"
-  ],
+  origin: allowedOrigins,
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
   credentials: true
 }));
