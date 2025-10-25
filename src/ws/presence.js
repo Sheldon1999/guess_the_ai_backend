@@ -40,7 +40,11 @@ async function flushOne(walletAddress, dateKey) {
   // Atomically read old value and reset to 0
   const drainedRaw = await redis.getset(keyP, "0"); // returns previous value or null
   const incMs = Number(drainedRaw || 0);
-  if (!incMs || incMs <= 0) return 0;
+  if (!incMs || incMs <= 0) {
+    // getset nukes TTL; keep our expiry budget even when nothing flushed
+    await redis.expire(keyP, REDIS_TTL_SECONDS).catch(() => {});
+    return 0;
+  }
 
   // Persist to Mongo (upsert)
   await userActiveDaily.updateOne(
@@ -72,15 +76,19 @@ export function attachPresenceWS(httpServer) {
       const token =
         socket.handshake.auth?.token ||
         (bearer.startsWith("Bearer ") ? bearer.slice(7) : "");
-      if (!token) return next(new Error("Unauthorized"));
+      if (!token) {
+        return next(new Error("Unauthorized"));
+      }
 
       const payload = await verifyToken(token);
       const walletAddress = String(payload.walletAddress || "").toLowerCase();
-      if (!walletAddress) return next(new Error("Unauthorized: no wallet in token"));
+      if (!walletAddress) {
+        return next(new Error("Unauthorized: no wallet in token"));
+      }
 
       socket.user = { walletAddress, claims: payload };
       next();
-    } catch {
+    } catch (err) {
       next(new Error("Unauthorized"));
     }
   });
@@ -88,7 +96,6 @@ export function attachPresenceWS(httpServer) {
   io.on("connection", (socket) => {
     const wallet = socket.user.walletAddress;
     let lastDateKey = istDateKey();
-    console.log(`[ws] connected wallet:${wallet} socket:${socket.id}`);
 
     // Client sends { deltaMs } in 60s quanta (or integer multiples up to 6min)
     socket.on("presence:add", async (payload = {}, ack) => {
@@ -142,14 +149,12 @@ export function attachPresenceWS(httpServer) {
           });
         }
       } catch (e) {
-        console.error("presence:add error", e);
         if (hasAck) ack({ ok: false, reason: "server_error" });
       }
     });
 
     // DESIGNATED DB WRITE: on disconnect, best-effort flush
     socket.on("disconnect", async (reason) => {
-      console.log(`[ws] disconnected wallet:${wallet} socket:${socket.id} (${reason})`);
       try {
         const dk = lastDateKey || istDateKey();
         await flushOne(wallet, dk);

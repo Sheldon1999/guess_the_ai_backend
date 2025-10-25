@@ -69,6 +69,6 @@ console.log("MY PORT IS ", port);
 
 // ⬇️ minimal addition: create HTTP server & attach WS
 const server = http.createServer(app);
-// attachPresenceWS(server);
+attachPresenceWS(server);
 
 server.listen(port, () => console.log(`server: http://localhost:${port} (ws on /ws)`));
