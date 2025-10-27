@@ -38,21 +38,29 @@ export async function enqueueCached() {
 }
 
 async function pmap(items, fn, conc = CONC) {
-  const q = [...items];
-  const running = new Set();
-  let ok = 0, fail = 0;
-  const next = async () => {
-    const it = q.shift();
-    if (!it) return;
-    const p = (async () => {
-      try { await fn(it); ok++; } catch { fail++; }
-      running.delete(p);
-      await next();
-    })();
-    running.add(p);
+  const total = items.length;
+  if (!total) return { ok: 0, fail: 0 };
+
+  let ok = 0;
+  let fail = 0;
+  let cursor = 0;
+
+  const worker = async () => {
+    while (true) {
+      const index = cursor++;
+      if (index >= total) break;
+      const item = items[index];
+      try {
+        await fn(item, index);
+        ok++;
+      } catch {
+        fail++;
+      }
+    }
   };
-  for (let i = 0; i < Math.min(conc, q.length); i++) await next();
-  await Promise.all([...running]);
+
+  const workers = Array.from({ length: Math.min(conc, total) }, worker);
+  await Promise.all(workers);
   return { ok, fail };
 }
 
@@ -63,14 +71,32 @@ export async function warmFromMongo(limit) {
   for await (const doc of cursor) {
     if (doc?.hash && typeof doc.hash === "string") list.push(doc.hash.toLowerCase());
   }
-  const { ok, fail } = await pmap(list, async (hash) => {
+  const total = list.length;
+  const { ok, fail } = await pmap(list, async (hash, index) => {
     const filePath = path.join(CACHE_DIR, hash);
+    const seq = index + 1;
+    const prefix = `[warmup] hash:${hash} seq:${seq}/${total}`;
+    console.log(`${prefix} trying`);
+    let source = "cached";
     try {
       await fs.promises.access(filePath, fs.constants.R_OK);
     } catch {
-      await fetchToDisk(hash, filePath); // HTTP or CLI + fallback
+      source = "fetched";
+      try {
+        console.log(`${prefix} not-on-disk -> fetch`);
+        await fetchToDisk(hash, filePath); // HTTP or CLI + fallback
+      } catch (fetchErr) {
+        console.warn(`${prefix} fetch error:${fetchErr?.message || fetchErr}`);
+        throw fetchErr;
+      }
     }
-    await enqueueIfMissing(hash);
+    try {
+      await enqueueIfMissing(hash);
+    } catch (enqueueErr) {
+      console.warn(`${prefix} enqueue error:${enqueueErr?.message || enqueueErr}`);
+      throw enqueueErr;
+    }
+    console.log(`${prefix} success source:${source}`);
   });
   return { scanned: list.length, warmed: ok, failed: fail };
 }
