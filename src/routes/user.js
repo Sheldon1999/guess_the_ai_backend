@@ -2,6 +2,7 @@
 import { users, dailyLogins } from "../lib/mongo.js";
 import { generateAuthToken } from "../middleware/jwt.js";
 import { protect } from "../middleware/jwt.js";
+import { recordUserRegistration } from "../lib/onchain/index.js";
 
 function normalizeWallet(w) {
   return String(w || "").trim().toLowerCase();
@@ -48,6 +49,8 @@ export default function userRoutes(app) {
           { $setOnInsert: setOnInsert, $set: set },
           { upsert: true }
         );
+        recordUserRegistration({ walletAddress, username })
+          .catch((e) => console.error("onchain register error:", e));
       }
       else {
         username = isAccountExisted?.username;
