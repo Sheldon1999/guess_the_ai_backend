@@ -59,11 +59,6 @@ imageRoutes(app);
 gameRoutes(app);
 leaderboardRoutes(app);
 
-await warmOnBoot().then(r => console.log("warmup:", r)).catch(e => console.error("warmup error:", e));
-
-// Optional background maintainer (no-op if PREFETCH_INTERVAL_SEC=0)
-const stopTopup = await startBackgroundTopup();
-
 const port = Number(process.env.PORT || 3000);
 console.log("MY PORT IS ", port);
 
@@ -72,3 +67,10 @@ const server = http.createServer(app);
 attachPresenceWS(server);
 
 server.listen(port, () => console.log(`server: http://localhost:${port} (ws on /ws)`));
+
+await warmOnBoot().then(r => console.log("warmup:", r)).catch(e => console.error("warmup error:", e));
+
+// Optional background maintainer (no-op if PREFETCH_INTERVAL_SEC=0)
+const stopTopup = await startBackgroundTopup();
+
+
