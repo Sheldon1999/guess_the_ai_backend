@@ -4,6 +4,7 @@ import path from "path";
 import redis from "./redis.js";
 import { images } from "./mongo.js";
 import { fetchToDisk } from "./fetcher.js";
+import { ensureImageMeta } from "./docCache.js";
 
 const CACHE_DIR = process.env.CACHE_DIR || "./cache/orig";
 const CONC = Math.max(Number(process.env.WARMER_CONCURRENCY || 8), 1);
@@ -69,7 +70,10 @@ export async function warmFromMongo(limit) {
   const cursor = images.find({}).sort({ uploadedAt: -1, _id: -1 }).limit(limit);
   const list = [];
   for await (const doc of cursor) {
-    if (doc?.hash && typeof doc.hash === "string") list.push(doc.hash.toLowerCase());
+    if (doc?.hash && typeof doc.hash === "string") {
+      list.push(doc.hash.toLowerCase());
+      await ensureImageMeta(doc).catch(() => {});
+    }
   }
   const total = list.length;
   const { ok, fail } = await pmap(list, async (hash, index) => {

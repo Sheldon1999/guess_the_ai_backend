@@ -14,6 +14,11 @@ import userRoutes from "./routes/user.js";
 import gameRoutes from "./routes/game.js";
 import leaderboardRoutes from "./routes/leaderboard.js";
 import { warmOnBoot, startBackgroundTopup } from "./lib/warmup.js";
+import {
+  hydrateRedisFromMongo,
+  shouldLoadFromRedis,
+  startRedisFlushWorker,
+} from "./lib/docCache.js";
 
 // NEW: attach presence WS
 import { attachPresenceWS } from "./ws/presence.js";
@@ -69,8 +74,13 @@ attachPresenceWS(server);
 server.listen(port, () => console.log(`server: http://localhost:${port} (ws on /ws)`));
 
 await warmOnBoot().then(r => console.log("warmup:", r)).catch(e => console.error("warmup error:", e));
+if (shouldLoadFromRedis()) {
+  await hydrateRedisFromMongo()
+    .then((report) => console.log("redis hydrate:", report))
+    .catch((err) => console.error("redis hydrate error:", err));
+}
 
 // Optional background maintainer (no-op if PREFETCH_INTERVAL_SEC=0)
 const stopTopup = await startBackgroundTopup();
-
+const stopRedisFlush = await startRedisFlushWorker();
 

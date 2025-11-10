@@ -17,6 +17,7 @@ async function fetchHTTPToBuffer(hash) {
   const timer = setTimeout(() => controller.abort(), READ_MS);
   let resp;
   try {
+    console.log("Trying ", url)
     resp = await fetch(url, { signal: controller.signal });
   } catch (e) {
     clearTimeout(timer);
@@ -101,6 +102,7 @@ export async function fetchToDisk(hash, destPath) {
 
   if (FETCH_MODE === "HTTP") {
     try {
+      console.info("fetching via HTTP")
       return await tryHTTP();
     } catch (e) {
       if (!FETCH_FALLBACK) throw e;
@@ -112,6 +114,7 @@ export async function fetchToDisk(hash, destPath) {
     }
   } else {
     try {
+      console.info("fetching via CLI")
       return await tryCLI();
     } catch (e) {
       if (!FETCH_FALLBACK) throw e;

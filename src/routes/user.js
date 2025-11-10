@@ -3,6 +3,11 @@ import { users, dailyLogins } from "../lib/mongo.js";
 import { generateAuthToken } from "../middleware/jwt.js";
 import { protect } from "../middleware/jwt.js";
 import { recordUserRegistration } from "../lib/onchain/index.js";
+import {
+  writeUserToRedis,
+  shouldLoadFromRedis,
+  fetchUserProfile,
+} from "../lib/docCache.js";
 
 function normalizeWallet(w) {
   return String(w || "").trim().toLowerCase();
@@ -17,6 +22,7 @@ export default function userRoutes(app) {
   app.post("/api/user/login", async (req, res) => {
     try {
       const walletAddress = normalizeWallet(req.body?.walletAddress);
+      const now = new Date();
   
       if (!walletAddress) {
         return res.status(400).json({ success: false, message: "invalid walletAddress" });
@@ -35,11 +41,13 @@ export default function userRoutes(app) {
           streak: 0,
           rank: "E",
           dungeonTitle: "Newbie",
-          createdAt: new Date(),
+          createdAt: now,
           username,
-          nameUpdated:false
+          nameUpdated:false,
+          lastUpdatedAt: now,
+          lastFlushedAt: now,
         };
-        const now = new Date();
+
         const set = {
           updatedAt: now
         };
@@ -77,6 +85,29 @@ export default function userRoutes(app) {
 
       // Generate JWT token with just the wallet address
       const token = await generateAuthToken({ _id: walletAddress, wallet:walletAddress,username});
+
+      if (shouldLoadFromRedis()) {
+        const cacheDoc = isAccountExisted
+          ? {
+            ...isAccountExisted,
+            walletAddress,
+            username,
+            lastUpdatedAt: isAccountExisted.lastUpdatedAt || now,
+            lastFlushedAt: isAccountExisted.lastFlushedAt || now,
+          }
+          : {
+            walletAddress,
+            username,
+            correctAnswers: 0,
+            currentStreak: 0,
+            streak: 0,
+            rank: "E",
+            dungeonTitle: "Newbie",
+            lastUpdatedAt: now,
+            lastFlushedAt: now,
+          };
+        await writeUserToRedis(cacheDoc);
+      }
   
       return res.json({ success: true, data: { token, username,  nameUpdated: nameUpdated  } });
     } catch (e) {
@@ -93,6 +124,7 @@ export default function userRoutes(app) {
       try {
         // Get walletAddress from the JWT token (set by protect middleware)
         const walletAddress = req.user.walletAddress;
+        const now = new Date();
         
         const isNameExisted  = await users.findOne({ username: req.body.username ,walletAddress:{ $ne: walletAddress }  });
 
@@ -116,7 +148,9 @@ export default function userRoutes(app) {
           }
           updates.username = username;
         }
-        updates.updatedAt = new Date();
+        updates.updatedAt = now;
+        updates.lastUpdatedAt = now;
+        updates.lastFlushedAt = now;
         updates.nameUpdated = true;
         const result = await users.updateOne(
           { walletAddress, }, 
@@ -172,23 +206,7 @@ export default function userRoutes(app) {
         // Get walletAddress from the authenticated user's JWT
         const walletAddress = req.user.walletAddress;
         
-        const profile = await users.findOne(
-          { walletAddress },
-          {
-            projection: {
-              walletAddress:1,
-              username: 1, 
-              correctAnswers: 1, 
-              currentStreak: 1, 
-              streak: 1,
-              rank: 1, 
-              dungeonTitle: 1
-              // , 
-              // createdAt: 1, 
-              // updatedAt: 1
-            }
-          }
-        );
+        const profile = await fetchUserProfile(walletAddress);
         
         if (!profile) {
           return res.status(404).json({ 
