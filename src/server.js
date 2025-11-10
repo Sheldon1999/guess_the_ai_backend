@@ -13,12 +13,14 @@ import imageRoutes from "./routes/image.js";
 import userRoutes from "./routes/user.js";
 import gameRoutes from "./routes/game.js";
 import leaderboardRoutes from "./routes/leaderboard.js";
+import backupRoutes from "./routes/backup.js";
 import { warmOnBoot, startBackgroundTopup } from "./lib/warmup.js";
 import {
   hydrateRedisFromMongo,
   shouldLoadFromRedis,
   startRedisFlushWorker,
 } from "./lib/docCache.js";
+import { seedBackupQueue } from "./lib/backupQueue.js";
 
 // NEW: attach presence WS
 import { attachPresenceWS } from "./ws/presence.js";
@@ -63,6 +65,7 @@ health(app);
 imageRoutes(app);
 gameRoutes(app);
 leaderboardRoutes(app);
+backupRoutes(app);
 
 const port = Number(process.env.PORT || 3000);
 console.log("MY PORT IS ", port);
@@ -79,8 +82,10 @@ if (shouldLoadFromRedis()) {
     .then((report) => console.log("redis hydrate:", report))
     .catch((err) => console.error("redis hydrate error:", err));
 }
+await seedBackupQueue()
+  .then((report) => console.log("backup queue seeded:", report))
+  .catch((err) => console.error("backup queue seed error:", err));
 
 // Optional background maintainer (no-op if PREFETCH_INTERVAL_SEC=0)
 const stopTopup = await startBackgroundTopup();
 const stopRedisFlush = await startRedisFlushWorker();
-
