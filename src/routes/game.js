@@ -1,11 +1,22 @@
 // src/routes/game
 import { randomUUID } from "node:crypto";
 import redis from "../lib/redis.js";
-import { users, images } from "../lib/mongo.js";
+import { users } from "../lib/mongo.js";
 import { getTruthLabel } from "../lib/kv.js";
-import { rankSwitchExpression, titleSwitchExpression } from "../lib/rank.js";
+import {
+  rankSwitchExpression,
+  titleSwitchExpression,
+  rankFromCorrect,
+  titleFromStreak,
+} from "../lib/rank.js";
 import { protect } from '../middleware/jwt.js';
 import { deriveSessionKey, recordGameEnd, recordGameStart } from "../lib/onchain/index.js";
+import {
+  fetchUserProfile,
+  fetchImageMeta,
+  writeUserToRedis,
+  shouldLoadFromRedis,
+} from "../lib/docCache.js";
 
 const COOLDOWN_DAYS = Number(process.env.IMAGE_COOLDOWN_DAYS || 7);
 const COOLDOWN_SECS = COOLDOWN_DAYS * 24 * 60 * 60;
@@ -71,8 +82,8 @@ async function recordExposure(userId, imageId) {
 }
 
 async function getOrCreateImageIdByHash(hash) {
-  const existing = await images.findOne({ hash }, { projection: { _id: 1 } });
-  if (existing?._id) return existing._id;
+  const image = await fetchImageMeta(hash);
+  if (image?.imageId) return image.imageId;
 }
 
 async function pickEligibleImage(wallet, mode="single") {
@@ -305,107 +316,250 @@ export default function gameRoutes(app) {
     }
   );
 
+  async function handleMongoAnswer(req, res) {
+    const startTime = Date.now();
+    const timings = [];
+    let lastMark = startTime;
+    const markStep = (label) => {
+      const now = Date.now();
+      timings.push({ label, ms: now - lastMark });
+      lastMark = now;
+    };
+
+    try {
+      const wallet = req.user.walletAddress;
+      const hash = String(req.body?.hash || "").trim();
+      const guess = normalizeGuess(req.body?.guess);
+      const sessionId = String(req.body?.sessionId || "").trim();
+
+      if (!hash) return res.status(400).json({ error: "hash required" });
+      if (!guess) {
+        return res.status(400).json({ error: "guess must be 'ai' or 'human'" });
+      }
+
+      const now = new Date();
+
+      const imageId = await getOrCreateImageIdByHash(hash);
+      markStep("getOrCreateImageIdByHash");
+
+      let truth;
+      try {
+        truth = await getTruthLabel(hash);
+        markStep("getTruthLabel");
+      } catch (e) {
+        return res
+          .status(502)
+          .json({ error: "label unavailable", detail: e.message });
+      }
+
+      const correct = guess === truth;
+
+      const session = await loadSession(wallet);
+      markStep("loadSession");
+      if (session && (!sessionId || session.sessionId === sessionId)) {
+        session.totalGuesses = (session.totalGuesses || 0) + 1;
+        if (correct) {
+          session.correctGuesses = (session.correctGuesses || 0) + 1;
+        }
+        session.lastUpdatedAt = now.toISOString();
+        await persistSession(wallet, session);
+        markStep("persistSession");
+      }
+
+      const baseCorrectAnswers = { $ifNull: ["$correctAnswers", 0] };
+      const baseCurrentStreak = { $ifNull: ["$currentStreak", 0] };
+      const baseStreak = { $ifNull: ["$streak", 0] };
+
+      const updatedCorrectAnswers = correct
+        ? { $add: [baseCorrectAnswers, 1] }
+        : baseCorrectAnswers;
+      const updatedCurrentStreak = correct
+        ? { $add: [baseCurrentStreak, 1] }
+        : 0;
+      const computedStreak = correct
+        ? {
+          $cond: [
+            { $gt: ["$currentStreak", baseStreak] },
+            "$currentStreak",
+            baseStreak,
+          ],
+        }
+        : baseStreak;
+
+      const rankExpression = rankSwitchExpression("$correctAnswers");
+      const dungeonTitleExpression = titleSwitchExpression(computedStreak);
+
+      const profileResult = await users.findOneAndUpdate(
+        { walletAddress: wallet },
+        [
+          {
+            $set: {
+              correctAnswers: updatedCorrectAnswers,
+              currentStreak: updatedCurrentStreak,
+            },
+          },
+          {
+            $set: {
+              streak: computedStreak,
+              rank: rankExpression,
+              dungeonTitle: dungeonTitleExpression,
+              updatedAt: now,
+              lastUpdatedAt: now,
+              lastFlushedAt: now,
+            },
+          },
+        ],
+        {
+          returnDocument: "after",
+          projection: {
+            username: 1,
+            correctAnswers: 1,
+            currentStreak: 1,
+            streak: 1,
+            rank: 1,
+            dungeonTitle: 1,
+          },
+        }
+      );
+      markStep("findOneAndUpdate");
+
+      const profile = profileResult || null;
+      const totalMs = Date.now() - startTime;
+      if (totalMs > 1000) {
+        console.warn("game/answer slow response", {
+          wallet,
+          hash,
+          correct,
+          totalMs,
+          timings,
+        });
+      }
+
+      return res.json({ correct, truth, imageId: String(imageId), hash, profile });
+    } catch (error) {
+      const totalMs = Date.now() - startTime;
+      if (totalMs > 1000) {
+        console.error("game/answer slow error:", error, {
+          totalMs,
+          timings,
+        });
+      } else {
+        console.error("game/answer error:", error);
+      }
+      return res.status(500).json({ error: "internal server error" });
+    }
+  }
+
+  async function handleRedisAnswer(req, res) {
+    const startTime = Date.now();
+    const timings = [];
+    let lastMark = startTime;
+    const markStep = (label) => {
+      const now = Date.now();
+      timings.push({ label, ms: now - lastMark });
+      lastMark = now;
+    };
+
+    try {
+      const wallet = req.user.walletAddress;
+      const hash = String(req.body?.hash || "").trim();
+      const guess = normalizeGuess(req.body?.guess);
+      const sessionId = String(req.body?.sessionId || "").trim();
+
+      if (!hash) return res.status(400).json({ error: "hash required" });
+      if (!guess) {
+        return res.status(400).json({ error: "guess must be 'ai' or 'human'" });
+      }
+
+      const now = new Date();
+
+      const imageMeta = await fetchImageMeta(hash);
+      markStep("fetchImageMeta");
+      if (!imageMeta?.imageId) return handleMongoAnswer(req, res);
+      const truth = normalizeGuess(imageMeta.label);
+      if (!truth) return handleMongoAnswer(req, res);
+
+      const correct = guess === truth;
+
+      const session = await loadSession(wallet);
+      markStep("loadSession");
+      if (session && (!sessionId || session.sessionId === sessionId)) {
+        session.totalGuesses = (session.totalGuesses || 0) + 1;
+        if (correct) {
+          session.correctGuesses = (session.correctGuesses || 0) + 1;
+        }
+        session.lastUpdatedAt = now.toISOString();
+        await persistSession(wallet, session);
+        markStep("persistSession");
+      }
+
+      const profile = await fetchUserProfile(wallet);
+      markStep("fetchUserProfile");
+      if (!profile) return handleMongoAnswer(req, res);
+
+      const nextCorrectAnswers = correct ? profile.correctAnswers + 1 : profile.correctAnswers;
+      const nextCurrentStreak = correct ? profile.currentStreak + 1 : 0;
+      const nextStreak = correct ? Math.max(nextCurrentStreak, profile.streak) : profile.streak;
+      const updatedProfile = {
+        ...profile,
+        correctAnswers: nextCorrectAnswers,
+        currentStreak: nextCurrentStreak,
+        streak: nextStreak,
+        rank: rankFromCorrect(nextCorrectAnswers),
+        dungeonTitle: titleFromStreak(nextStreak),
+        lastUpdatedAt: now.toISOString(),
+      };
+      await writeUserToRedis(updatedProfile, true);
+      markStep("updateRedisProfile");
+
+      const profileResponse = {
+        username: updatedProfile.username,
+        correctAnswers: updatedProfile.correctAnswers,
+        currentStreak: updatedProfile.currentStreak,
+        streak: updatedProfile.streak,
+        rank: updatedProfile.rank,
+        dungeonTitle: updatedProfile.dungeonTitle,
+      };
+
+      const totalMs = Date.now() - startTime;
+      if (totalMs > 1000) {
+        console.warn("game/ans slow response", {
+          wallet,
+          hash,
+          correct,
+          totalMs,
+          timings,
+        });
+      }
+
+      return res.json({
+        correct,
+        truth,
+        imageId: String(imageMeta.imageId),
+        hash,
+        profile: profileResponse,
+      });
+    } catch (error) {
+      const totalMs = Date.now() - startTime;
+      if (totalMs > 1000) {
+        console.error("game/ans slow error:", error, {
+          totalMs,
+          timings,
+        });
+      } else {
+        console.error("game/ans error:", error);
+      }
+      return res.status(500).json({ error: "internal server error" });
+    }
+  }
+
+  app.post("/api/game/answer", protect, handleMongoAnswer);
   app.post(
-    "/api/game/answer",
+    "/api/game/ans",
     protect,
     async (req, res) => {
-      try {
-        const wallet = req.user.walletAddress;
-        const hash = String(req.body?.hash || "").trim();
-        const guess = normalizeGuess(req.body?.guess);
-        const sessionId = String(req.body?.sessionId || "").trim();
-
-        if (!hash) return res.status(400).json({ error: "hash required" });
-        if (!guess) {
-          return res.status(400).json({ error: "guess must be 'ai' or 'human'" });
-        }
-
-        const now = new Date();
-
-        const imageId = await getOrCreateImageIdByHash(hash);
-
-        let truth;
-        try {
-          truth = await getTruthLabel(hash);
-        } catch (e) {
-          return res
-            .status(502)
-            .json({ error: "label unavailable", detail: e.message });
-        }
-
-        const correct = guess === truth;
-
-        const session = await loadSession(wallet);
-        if (session && (!sessionId || session.sessionId === sessionId)) {
-          session.totalGuesses = (session.totalGuesses || 0) + 1;
-          if (correct) {
-            session.correctGuesses = (session.correctGuesses || 0) + 1;
-          }
-          session.lastUpdatedAt = now.toISOString();
-          await persistSession(wallet, session);
-        }
-
-        const baseCorrectAnswers = { $ifNull: ["$correctAnswers", 0] };
-        const baseCurrentStreak = { $ifNull: ["$currentStreak", 0] };
-        const baseStreak = { $ifNull: ["$streak", 0] };
-
-        const updatedCorrectAnswers = correct
-          ? { $add: [baseCorrectAnswers, 1] }
-          : baseCorrectAnswers;
-        const updatedCurrentStreak = correct
-          ? { $add: [baseCurrentStreak, 1] }
-          : 0;
-        const computedStreak = correct
-          ? {
-            $cond: [
-              { $gt: ["$currentStreak", baseStreak] },
-              "$currentStreak",
-              baseStreak,
-            ],
-          }
-          : baseStreak;
-
-        const rankExpression = rankSwitchExpression("$correctAnswers");
-        const dungeonTitleExpression = titleSwitchExpression(computedStreak);
-
-        const profileResult = await users.findOneAndUpdate(
-          { walletAddress: wallet },
-          [
-            {
-              $set: {
-                correctAnswers: updatedCorrectAnswers,
-                currentStreak: updatedCurrentStreak,
-              },
-            },
-            {
-              $set: {
-                streak: computedStreak,
-                rank: rankExpression,
-                dungeonTitle: dungeonTitleExpression,
-                updatedAt: now,
-              },
-            },
-          ],
-          {
-            returnDocument: "after",
-            projection: {
-              username: 1,
-              correctAnswers: 1,
-              currentStreak: 1,
-              streak: 1,
-              rank: 1,
-              dungeonTitle: 1,
-            },
-          }
-        );
-
-        const profile = profileResult || null;
-
-        return res.json({ correct, truth, imageId: String(imageId), hash, profile });
-      } catch (error) {
-        console.error("game/answer error:", error);
-        return res.status(500).json({ error: "internal server error" });
-      }
+      if (!shouldLoadFromRedis()) return handleMongoAnswer(req, res);
+      return handleRedisAnswer(req, res);
     }
   );
 }
