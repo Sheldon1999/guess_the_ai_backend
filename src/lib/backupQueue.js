@@ -1,16 +1,24 @@
 import fs from "fs";
 import path from "path";
 import redis from "./redis.js";
+import { BACKUP_QUEUE_KEY, backupImageAnswerKey } from "./redisKeys.js";
+import answer_list from "./backup_answer.js";
 
 const BACKUP_DIR = process.env.BACKUP_CACHE_DIR || "./cache/backup";
-const BACKUP_QUEUE_KEY = "backup:ready:q";
 
 function isHashName(name) {
   if (!name || typeof name !== "string") return false;
   if (name.startsWith(".")) return false;
   const trimmed = name.trim();
   if (!trimmed) return false;
-  return trimmed.endsWith("_h") || trimmed.endsWith("_a");
+  return true;
+}
+
+export function deriveAnswerForFile(name) {
+  if (!name) return null;
+  const clean = name.trim();
+  const entry = answer_list.find((item) => item.file_name === clean);
+  return entry?.answer ?? null;
 }
 
 export async function seedBackupQueue() {
@@ -22,10 +30,14 @@ export async function seedBackupQueue() {
     if (!entry.isFile() || !isHashName(entry.name)) continue;
     totalFiles += 1;
     const name = entry.name;
+    const answer = deriveAnswerForFile(name);
     const pos = await redis.lpos(BACKUP_QUEUE_KEY, name);
     if (pos === null) {
       await redis.rpush(BACKUP_QUEUE_KEY, name);
       added += 1;
+    }
+    if (answer) {
+      await redis.set(backupImageAnswerKey(name), answer);
     }
   }
   return { totalFiles, added };

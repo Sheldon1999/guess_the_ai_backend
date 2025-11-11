@@ -17,16 +17,23 @@ import {
   writeUserToRedis,
   shouldLoadFromRedis,
 } from "../lib/docCache.js";
+import {
+  ACTIVE_USER_EXPIRY_SEC,
+  ACTIVE_USERS_KEY,
+  IMAGE_COOLDOWN_SECS,
+  READY_QUEUE_KEY,
+  recentExposureKey,
+  sessionKey,
+  SESSION_TTL_SEC,
+} from "../lib/redisKeys.js";
+import { handleBackupAnswer, pickEligibleBackupImage } from "../lib/backup.js";
 
-const COOLDOWN_DAYS = Number(process.env.IMAGE_COOLDOWN_DAYS || 7);
-const COOLDOWN_SECS = COOLDOWN_DAYS * 24 * 60 * 60;
-const MAX_ATTEMPTS = Number(process.env.MAX_ATTEMPTS_FINDING_UNUSED_HAS || 30);
+const MAX_ATTEMPTS = Number(process.env.MAX_ATTEMPTS_FINDING_UNUSED_HASH || 30);
 const IMAGES_LIST_SIZE = Number(process.env.IMAGES_LIST_SIZE || 10);
-const SESSION_TTL_SEC = Math.max(Number(process.env.GAME_SESSION_TTL_SEC || 3600), 60);
 
-const sessionKeyForWallet = (wallet) => `session:${wallet}`;
+const sessionKeyForWallet = (wallet) => sessionKey(wallet);
 
-async function loadSession(wallet) {
+export async function loadSession(wallet) {
   const raw = await redis.get(sessionKeyForWallet(wallet));
   if (!raw) return null;
   try {
@@ -37,7 +44,7 @@ async function loadSession(wallet) {
   }
 }
 
-async function persistSession(wallet, session) {
+export async function persistSession(wallet, session) {
   if (!session) return null;
   await redis.set(
     sessionKeyForWallet(wallet),
@@ -54,31 +61,31 @@ async function clearSession(wallet) {
 
 const nowSec = () => Math.floor(Date.now() / 1000);
 
-function normalizeGuess(g) {
+export function normalizeGuess(g) {
   const v = String(g || "")
     .trim()
     .toLowerCase();
   return v === "ai" || v === "human" ? v : null;
 }
 
-async function isEligibleForUser(userId, imageId) {
-  const cutoff = nowSec() - COOLDOWN_SECS;
-  const score = await redis.zscore(`recent:${userId}`, String(imageId));
+export async function isEligibleForUser(userId, imageId) {
+  const cutoff = nowSec() - IMAGE_COOLDOWN_SECS;
+  const score = await redis.zscore(recentExposureKey(userId), String(imageId));
   if (!score) return true;
   return Number(score) < cutoff;
 }
 
-async function recordExposure(userId, imageId) {
+export async function recordExposure(userId, imageId) {
   const ts = nowSec();
-  const key = `recent:${userId}`;
+  const key = recentExposureKey(userId);
 
   await redis
     .multi()
     .zadd(key, ts, String(imageId))
-    .expire(key, COOLDOWN_SECS)
+    .expire(key, IMAGE_COOLDOWN_SECS)
     .exec();
 
-  await redis.zremrangebyscore(key, 0, ts - COOLDOWN_SECS - 1);
+  await redis.zremrangebyscore(key, 0, ts - IMAGE_COOLDOWN_SECS - 1);
 }
 
 async function getOrCreateImageIdByHash(hash) {
@@ -94,14 +101,14 @@ async function pickEligibleImage(wallet, mode="single") {
     console.log('picking eligible image');
   }
   for (let i = 0; i < MAX_ATTEMPTS; i++) {
-    const hash = await redis.lpop("ready:q");
+    const hash = await redis.lpop(READY_QUEUE_KEY);
     if (!hash) {
       continue;
     }
     const imageId = await getOrCreateImageIdByHash(hash);
     const okUser = await isEligibleForUser(wallet, imageId);
     if (okUser) {
-      await redis.rpush("ready:q", hash); // keep in rotation
+      await redis.rpush(READY_QUEUE_KEY, hash); // keep in rotation
       await recordExposure(wallet, imageId);
 
       if(mode === "list"){
@@ -130,7 +137,7 @@ async function pickEligibleImage(wallet, mode="single") {
         };
       }
     } else {
-      await redis.rpush("ready:q", hash);
+      await redis.rpush(READY_QUEUE_KEY, hash);
     }
   }
 
@@ -262,17 +269,27 @@ export default function gameRoutes(app) {
     async (req, res) => {
       try {
         const wallet = req.user._id;
+        const isBackup = req.body.isBackup || false;
 
-        const expiry = Number(process.env.ACTIVE_USER_EXPIRY_SEC) || 600;
-        await redis.sadd("active:users", wallet);
-        await redis.expire("active:users", expiry);
+        const expiry = ACTIVE_USER_EXPIRY_SEC;
+        await redis.sadd(ACTIVE_USERS_KEY, wallet);
+        await redis.expire(ACTIVE_USERS_KEY, expiry);
 
-        let result = await pickEligibleImage(wallet);
+        let result;
+        if(isBackup){
+        result = await pickEligibleBackupImage(wallet);
+        } else {
+          result = await pickEligibleImage(wallet);
+        }
 
         if (result.status === 204) {
           console.log("could not find elligible image so deleting redis cache..");
-          await redis.del(`recent:${wallet}`);
-          result = await pickEligibleImage(wallet);
+          await redis.del(recentExposureKey(wallet));
+          if(isBackup){
+        result = await pickEligibleImage(wallet);
+        } else {
+          result = await pickEligibleBackupImage(wallet);
+        }
         }
 
         if (result.status === 200) return res.json(result.body);
@@ -293,15 +310,15 @@ export default function gameRoutes(app) {
       try {
         const wallet = req.user._id;
 
-        const expiry = Number(process.env.ACTIVE_USER_EXPIRY_SEC) || 600;
-        await redis.sadd("active:users", wallet);
-        await redis.expire("active:users", expiry);
+        const expiry = ACTIVE_USER_EXPIRY_SEC;
+        await redis.sadd(ACTIVE_USERS_KEY, wallet);
+        await redis.expire(ACTIVE_USERS_KEY, expiry);
 
         let result = await pickEligibleImage(wallet, "list");
 
         if (result.status === 204) {
           console.log("could not find elligible image so deleting redis cache..");
-          await redis.del(`recent:${wallet}`);
+          await redis.del(recentExposureKey(wallet));
           result = await pickEligibleImage(wallet, "list");
         }
 
@@ -317,14 +334,14 @@ export default function gameRoutes(app) {
   );
 
   async function handleMongoAnswer(req, res) {
-    const startTime = Date.now();
-    const timings = [];
-    let lastMark = startTime;
-    const markStep = (label) => {
-      const now = Date.now();
-      timings.push({ label, ms: now - lastMark });
-      lastMark = now;
-    };
+    // const startTime = Date.now();
+    // const timings = [];
+    // let lastMark = startTime;
+    // const markStep = (label) => {
+    //   const now = Date.now();
+    //   timings.push({ label, ms: now - lastMark });
+    //   lastMark = now;
+    // };
 
     try {
       const wallet = req.user.walletAddress;
@@ -421,19 +438,19 @@ export default function gameRoutes(app) {
           },
         }
       );
-      markStep("findOneAndUpdate");
+      // markStep("findOneAndUpdate");
 
       const profile = profileResult || null;
-      const totalMs = Date.now() - startTime;
-      if (totalMs > 1000) {
-        console.warn("game/answer slow response", {
-          wallet,
-          hash,
-          correct,
-          totalMs,
-          timings,
-        });
-      }
+      // const totalMs = Date.now() - startTime;
+      // if (totalMs > 1000) {
+      //   console.warn("game/answer slow response", {
+      //     wallet,
+      //     hash,
+      //     correct,
+      //     totalMs,
+      //     timings,
+      //   });
+      // }
 
       return res.json({ correct, truth, imageId: String(imageId), hash, profile });
     } catch (error) {
@@ -451,15 +468,6 @@ export default function gameRoutes(app) {
   }
 
   async function handleRedisAnswer(req, res) {
-    const startTime = Date.now();
-    const timings = [];
-    let lastMark = startTime;
-    const markStep = (label) => {
-      const now = Date.now();
-      timings.push({ label, ms: now - lastMark });
-      lastMark = now;
-    };
-
     try {
       const wallet = req.user.walletAddress;
       const hash = String(req.body?.hash || "").trim();
@@ -474,7 +482,6 @@ export default function gameRoutes(app) {
       const now = new Date();
 
       const imageMeta = await fetchImageMeta(hash);
-      markStep("fetchImageMeta");
       if (!imageMeta?.imageId) return handleMongoAnswer(req, res);
       const truth = normalizeGuess(imageMeta.label);
       if (!truth) return handleMongoAnswer(req, res);
@@ -482,7 +489,6 @@ export default function gameRoutes(app) {
       const correct = guess === truth;
 
       const session = await loadSession(wallet);
-      markStep("loadSession");
       if (session && (!sessionId || session.sessionId === sessionId)) {
         session.totalGuesses = (session.totalGuesses || 0) + 1;
         if (correct) {
@@ -490,11 +496,9 @@ export default function gameRoutes(app) {
         }
         session.lastUpdatedAt = now.toISOString();
         await persistSession(wallet, session);
-        markStep("persistSession");
       }
 
       const profile = await fetchUserProfile(wallet);
-      markStep("fetchUserProfile");
       if (!profile) return handleMongoAnswer(req, res);
 
       const nextCorrectAnswers = correct ? profile.correctAnswers + 1 : profile.correctAnswers;
@@ -510,7 +514,6 @@ export default function gameRoutes(app) {
         lastUpdatedAt: now.toISOString(),
       };
       await writeUserToRedis(updatedProfile, true);
-      markStep("updateRedisProfile");
 
       const profileResponse = {
         username: updatedProfile.username,
@@ -520,17 +523,6 @@ export default function gameRoutes(app) {
         rank: updatedProfile.rank,
         dungeonTitle: updatedProfile.dungeonTitle,
       };
-
-      const totalMs = Date.now() - startTime;
-      if (totalMs > 1000) {
-        console.warn("game/ans slow response", {
-          wallet,
-          hash,
-          correct,
-          totalMs,
-          timings,
-        });
-      }
 
       return res.json({
         correct,
@@ -558,6 +550,8 @@ export default function gameRoutes(app) {
     "/api/game/ans",
     protect,
     async (req, res) => {
+      const isBackup = req.body.isBackup || false;
+      if(isBackup) return handleBackupAnswer(req, res);
       if (!shouldLoadFromRedis()) return handleMongoAnswer(req, res);
       return handleRedisAnswer(req, res);
     }
