@@ -3,11 +3,18 @@ import { Server } from "socket.io";
 import redis from "../lib/redis.js";
 import { verifyToken } from "../middleware/jwt.js";
 import { userActiveDaily } from "../lib/mongo.js";
+import {
+  presencePendingKey,
+  presenceTotalKey,
+  presenceTouchedKey,
+  presenceTouchedScanPattern,
+  PRESENCE_REDIS_TTL_SECONDS,
+} from "../lib/redisKeys.js";
 
 // ===== Config (same spirit as your old app; names are descriptive) =====
 const CLIENT_FLUSH_MS = Number(process.env.PRESENCE_CLIENT_FLUSH_QUANTUM_MS || 60000);   // 60s
 const DURABLE_BATCH_MS = Number(process.env.PRESENCE_DURABLE_BATCH_MS || 360000);        // 6 min
-const REDIS_TTL_SECONDS = Number(process.env.PRESENCE_REDIS_TTL_SECONDS || 3 * 24 * 3600); // 3 days
+const REDIS_TTL_SECONDS = PRESENCE_REDIS_TTL_SECONDS;
 const FLUSH_INTERVAL_MS = Number(process.env.PRESENCE_FLUSH_INTERVAL_MS || 60000);       // 60s
 
 // ===== Helpers =====
@@ -21,10 +28,10 @@ function istDateKey(d = new Date()) {
   return `${yyyy}-${mm}-${dd}`;
 }
 
-// Redis keys (keep close to your old naming)
-const kPending = (wa, dk) => `p:day:${wa}:${dk}:pending`;  // integer ms
-const kTotal   = (wa, dk) => `p:day:${wa}:${dk}:total`;    // integer ms
-const kTouched = (wa)     => `p:user:${wa}:touched`;       // set of dateKeys
+// Redis key helpers
+const kPending = (wa, dk) => presencePendingKey(wa, dk);  // integer ms
+const kTotal = (wa, dk) => presenceTotalKey(wa, dk);      // integer ms
+const kTouched = (wa) => presenceTouchedKey(wa);          // set of dateKeys
 
 function isValidDelta(ms) {
   if (!Number.isFinite(ms) || ms <= 0) return false;
@@ -172,11 +179,11 @@ export function attachPresenceWS(httpServer) {
       // iterate touched sets
       let cursor = "0";
       do {
-        const [next, keys] = await redis.scan(cursor, "MATCH", "p:user:*:touched", "COUNT", 200);
+        const [next, keys] = await redis.scan(cursor, "MATCH", presenceTouchedScanPattern, "COUNT", 200);
         cursor = next;
 
         for (const setKey of keys) {
-          // setKey = p:user:{wallet}:touched
+          // setKey = <prefix>presence:user:{wallet}:touched
           const wallet = setKey.split(":")[2];
           if (!wallet) continue;
 

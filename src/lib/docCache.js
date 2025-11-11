@@ -1,20 +1,19 @@
 import redis from "./redis.js";
 import { users, images } from "./mongo.js";
 import { rankFromCorrect, titleFromStreak } from "./rank.js";
+import { DIRTY_USERS_KEY, docImageKey, docUserKey } from "./redisKeys.js";
 
 const LOAD_FROM_REDIS = String(process.env.LOAD_FROM_REDIS || "false").toLowerCase() === "true";
-const KEY_PREFIX = "gta:mongodoc:";
-const DIRTY_USERS_KEY = `${KEY_PREFIX}dirty-users`;
 const REDIS_FLUSH_BATCH = Math.max(Number(process.env.REDIS_DATA_FLUSH_BATCH || 100), 1);
 
-const userKey = (wallet) => `${KEY_PREFIX}user:${wallet}`;
-const imageKey = (hash) => `${KEY_PREFIX}image:${hash}`;
+const userKey = (wallet) => docUserKey(wallet);
+const imageKey = (hash) => docImageKey(hash);
 
 const normalizeWallet = (w) => String(w || "").trim().toLowerCase();
 const normalizeHash = (h) => String(h || "").trim().toLowerCase();
 const nowIso = () => new Date().toISOString();
 
-function safeParse(raw) {
+export function safeParse(raw) {
   if (!raw) return null;
   try {
     return JSON.parse(raw);
@@ -144,10 +143,13 @@ export async function fetchImageMeta(hash) {
 }
 
 export async function ensureImageMeta(docOrHash) {
-  if (!LOAD_FROM_REDIS) return null;
   if (!docOrHash) return null;
   if (typeof docOrHash === "string") {
-    return fetchImageMeta(docOrHash);
+    const meta = await fetchImageMeta(docOrHash);
+    if (meta) {
+      await redis.set(imageKey(meta.hash), JSON.stringify(meta));
+    }
+    return meta;
   }
   const meta = materializeImageDoc(docOrHash);
   if (!meta) return null;
