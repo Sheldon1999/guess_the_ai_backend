@@ -1,11 +1,16 @@
 // src/lib/mongo.js
 import { MongoClient } from "mongodb";
 
-console.log("MY URL IS ",process.env.MONGO_URL);
+console.log("[mongo] connection: URL: ",process.env.MONGO_URL);
 
 const client = new MongoClient(process.env.MONGO_URL);
-await client.connect();
-console.log("mongo: connected");
+try {
+  await client.connect();
+  console.log("[mongo] connection: successfull");
+} catch (err) {
+  console.error("[mongo] connection:: error: ", err);
+  throw err;
+}
 
 const db = client.db(); // db from URI (guesstheai)
 

@@ -70,7 +70,7 @@ export async function warmFromMongo(limit) {
   const total = list.length;
   const { ok, fail } = await pmap(list, async (hash, index) => {
     const seq = index + 1;
-    const prefix = `[warmup] hash:${hash} seq:${seq}/${total}`;
+    const prefix = `[warmup] hash:${hash}`;
     try {
       await enqueueIfMissing(hash);
     } catch (enqueueErr) {
@@ -100,11 +100,10 @@ export async function warmOnBoot() {
 
 // Optional periodic top-up (returns a stop function)
 export async function startBackgroundTopup() {
-  console.log("Backgroung topup started..");
   const periodSec = Number(process.env.PER_TOPUP_INTERVAL_SEC || 300);
   const pertopupTarget = Number(process.env.PER_TOPUP_TARGET) || 100;
   const id = setInterval(async () => {
-    try { const result = await runTopupFillRedis(pertopupTarget); } catch (e) { console.log("[topup] failed:"); }
+    try { const result = await runTopupFillRedis(pertopupTarget); console.log("[topup] success: ", result); } catch (e) { console.log("[topup] failed: error: ", e); }
   }, periodSec * 1000);
   return () => clearInterval(id);
 }

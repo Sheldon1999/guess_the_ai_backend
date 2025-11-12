@@ -1,6 +1,5 @@
 // server.js
 import "dotenv/config";
-import fs from "fs";
 import http from "http";
 import express from "express";
 import cors from "cors";
@@ -14,25 +13,17 @@ import imageRoutes from "./routes/image.js";
 import userRoutes from "./routes/user.js";
 import gameRoutes from "./routes/game.js";
 import leaderboardRoutes from "./routes/leaderboard.js";
-import { warmOnBoot, startBackgroundTopup } from "./lib/warmup.js";
-import {
-  hydrateRedisFromMongo,
-  shouldLoadFromRedis,
-  startRedisFlushWorker,
-} from "./lib/docCache.js";
-import { seedBackupQueue } from "./lib/backupQueue.js";
 
-// NEW: attach presence WS
+import { warmOnBoot, startBackgroundTopup } from "./lib/warmup.js";
+import { startRedisFlushWorker } from "./lib/docCache.js";
+import { seedBackupQueue } from "./lib/backupQueue.js";
 import { attachPresenceWS } from "./ws/presence.js";
 
 const app = express();
 app.use(express.json({ limit: "1mb" }));
 
 const defaultAllowedOrigins = [
-  "https://guesstheai.xyz",
-  "http://localhost:5172",
-  "http://localhost:5173",
-  "http://localhost:5174"
+  "https://guesstheai.xyz"
 ];
 
 const envOrigins = (process.env.CORS_ALLOWED_ORIGINS || "")
@@ -48,7 +39,13 @@ app.use(cors({
   credentials: true
 }));
 
-app.use(morgan('dev'))
+app.use(morgan('short', {
+  stream: {
+    write: (message) => {
+      process.stdout.write(`[morgan] ${message}`);
+    }
+  }
+}));
 
 if (process.env.ENABLE_CRASH_ENDPOINT === "true") {
   app.post("/debug/crash", (req, res) => {
@@ -58,9 +55,6 @@ if (process.env.ENABLE_CRASH_ENDPOINT === "true") {
   });
 }
 
-const cacheDir = process.env.CACHE_DIR || "./cache/orig";
-fs.mkdirSync(cacheDir, { recursive: true });
-
 // Routes
 userRoutes(app);
 health(app);
@@ -68,22 +62,19 @@ imageRoutes(app);
 gameRoutes(app);
 leaderboardRoutes(app);
 
-const port = Number(process.env.PORT || 3000);
-console.log("MY PORT IS ", port);
-
-// ⬇️ minimal addition: create HTTP server & attach WS
 const server = http.createServer(app);
 attachPresenceWS(server);
 
-server.listen(port, () => console.log(`server: http://localhost:${port} (ws on /ws)`));
+const port = Number(process.env.PORT || 3000);
+server.listen(port, () => console.log(`[server] listen: URL: http://localhost:${port}`));
 
 //to fill backup
 await seedBackupQueue()
-  .then((report) => console.log("backup queue seeded:", report))
-  .catch((err) => console.error("backup queue seed error:", err));
+  .then((report) => console.log("[backup] queue: successfull: ", report))
+  .catch((err) => console.error("[backup] queue: error: ", err));
 
 // to fill in a single go
-await warmOnBoot().then(r => console.log("[warmup]:", r)).catch(e => console.error("[warmup] error:", e));
+await warmOnBoot().then(r => console.log("[warmup] successfull: ", r)).catch(e => console.error("[warmup] error: ", e));
 
 // Optional background maintainer (no-op if PREFETCH_INTERVAL_SEC=0)
 const stopTopup = await startBackgroundTopup();
