@@ -102,6 +102,12 @@ export function attachPresenceWS(httpServer) {
 
   io.on("connection", (socket) => {
     const wallet = socket.user.walletAddress;
+    const forwarded = socket.handshake.headers?.["x-forwarded-for"];
+    const ip =
+      (typeof forwarded === "string" && forwarded.split(",")[0]?.trim()) ||
+      socket.handshake.address ||
+      "unknown";
+    console.log("[websocket] connected: wallet: ", wallet, " ip: ", ip);
     let lastDateKey = istDateKey();
 
     // Client sends { deltaMs } in 60s quanta (or integer multiples up to 6min)
@@ -162,6 +168,7 @@ export function attachPresenceWS(httpServer) {
 
     // DESIGNATED DB WRITE: on disconnect, best-effort flush
     socket.on("disconnect", async (reason) => {
+      console.log("[websocket]: disconnected: wallet: ", wallet, " ip: ", ip);
       try {
         const dk = lastDateKey || istDateKey();
         await flushOne(wallet, dk);

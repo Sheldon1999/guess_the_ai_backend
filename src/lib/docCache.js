@@ -3,7 +3,7 @@ import { users, images } from "./mongo.js";
 import { rankFromCorrect, titleFromStreak } from "./rank.js";
 import { DIRTY_USERS_KEY, docImageKey, docUserKey } from "./redisKeys.js";
 
-const LOAD_FROM_REDIS = String(process.env.LOAD_FROM_REDIS || "false").toLowerCase() === "true";
+const LOAD_FROM_REDIS = String(process.env.LOAD_FROM_REDIS || "true").toLowerCase() === "true";
 const REDIS_FLUSH_BATCH = Math.max(Number(process.env.REDIS_DATA_FLUSH_BATCH || 100), 1);
 
 const userKey = (wallet) => docUserKey(wallet);
@@ -157,42 +157,6 @@ export async function ensureImageMeta(docOrHash) {
   return meta;
 }
 
-export async function hydrateRedisFromMongo() {
-  if (!LOAD_FROM_REDIS) return { skipped: true };
-  let usersSynced = 0;
-  let imagesSynced = 0;
-
-  const userCursor = users.find({}, {
-    projection: {
-      walletAddress: 1,
-      username: 1,
-      correctAnswers: 1,
-      currentStreak: 1,
-      streak: 1,
-      rank: 1,
-      dungeonTitle: 1,
-      lastUpdatedAt: 1,
-      lastFlushedAt: 1,
-      updatedAt: 1,
-    },
-  });
-  for await (const doc of userCursor) {
-    const payload = materializeUserDoc(doc);
-    await redis.set(userKey(payload.walletAddress), JSON.stringify(payload));
-    usersSynced += 1;
-  }
-
-  const imageCursor = images.find({}, { projection: { _id: 1, hash: 1, label: 1 } });
-  for await (const doc of imageCursor) {
-    const payload = materializeImageDoc(doc);
-    if (!payload) continue;
-    await redis.set(imageKey(payload.hash), JSON.stringify(payload));
-    imagesSynced += 1;
-  }
-
-  return { usersSynced, imagesSynced };
-}
-
 export async function queueUserFlush(wallet) {
   if (!LOAD_FROM_REDIS) return;
   const norm = normalizeWallet(wallet);
@@ -245,7 +209,7 @@ export async function flushDirtyUsers(limit = REDIS_FLUSH_BATCH) {
 
 export async function startRedisFlushWorker() {
   if (!LOAD_FROM_REDIS) return () => {};
-  const intervalSec = Number(process.env.REDIS_DATA_FLUSH || 0);
+  const intervalSec = Number(process.env.REDIS_DATA_FLUSH || 900);
   if (!intervalSec) return () => {};
   const timer = setInterval(() => {
     flushDirtyUsers().catch((err) => console.error("redis flush error:", err));

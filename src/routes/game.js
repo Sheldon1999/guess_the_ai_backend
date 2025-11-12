@@ -269,6 +269,10 @@ export default function gameRoutes(app) {
     async (req, res) => {
       try {
         const wallet = req.user._id;
+        
+        // putting player data to redis for fast ans
+        await fetchUserProfile(wallet);
+
         const isBackup = req.body.isBackup || false;
 
         const expiry = ACTIVE_USER_EXPIRY_SEC;
@@ -309,6 +313,8 @@ export default function gameRoutes(app) {
     async(req, res) => {
       try {
         const wallet = req.user._id;
+        // putting player data to redis for fast ans
+        await fetchUserProfile(wallet);
 
         const expiry = ACTIVE_USER_EXPIRY_SEC;
         await redis.sadd(ACTIVE_USERS_KEY, wallet);
@@ -334,15 +340,6 @@ export default function gameRoutes(app) {
   );
 
   async function handleMongoAnswer(req, res) {
-    // const startTime = Date.now();
-    // const timings = [];
-    // let lastMark = startTime;
-    // const markStep = (label) => {
-    //   const now = Date.now();
-    //   timings.push({ label, ms: now - lastMark });
-    //   lastMark = now;
-    // };
-
     try {
       const wallet = req.user.walletAddress;
       const hash = String(req.body?.hash || "").trim();
@@ -438,19 +435,8 @@ export default function gameRoutes(app) {
           },
         }
       );
-      // markStep("findOneAndUpdate");
 
       const profile = profileResult || null;
-      // const totalMs = Date.now() - startTime;
-      // if (totalMs > 1000) {
-      //   console.warn("game/answer slow response", {
-      //     wallet,
-      //     hash,
-      //     correct,
-      //     totalMs,
-      //     timings,
-      //   });
-      // }
 
       return res.json({ correct, truth, imageId: String(imageId), hash, profile });
     } catch (error) {
