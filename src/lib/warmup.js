@@ -22,7 +22,7 @@ async function saveWarmCursor(id) {
   await redis.set(WARM_LAST_KEY, id.toString());
 }
 
-export async function enqueueIfMissing(hash) {
+export async function appendIfMissing(hash) {
   const pos = await redis.lpos(READY_QUEUE_KEY, hash);
   if (pos === null) await redis.rpush(READY_QUEUE_KEY, hash);
 }
@@ -72,7 +72,7 @@ export async function warmFromMongo(limit) {
     const seq = index + 1;
     const prefix = `[warmup] hash:${hash}`;
     try {
-      await enqueueIfMissing(hash);
+      await appendIfMissing(hash);
     } catch (enqueueErr) {
       console.warn(`${prefix} enqueue error:${enqueueErr?.message || enqueueErr}`);
       throw enqueueErr;

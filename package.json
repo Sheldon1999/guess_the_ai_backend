@@ -15,6 +15,7 @@
     "express": "^4.19.2",
     "ioredis": "^5.4.1",
     "jsonwebtoken": "^9.0.2",
+    "libsodium-wrappers-sumo": "^0.7.15",
     "mongodb": "^6.6.2",
     "morgan": "^1.10.1",
     "pino-http": "^9.0.0",
