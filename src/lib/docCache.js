@@ -3,7 +3,6 @@ import { users, images } from "./mongo.js";
 import { rankFromCorrect, titleFromStreak } from "./rank.js";
 import { DIRTY_USERS_KEY, docImageKey, docUserKey } from "./redisKeys.js";
 
-const LOAD_FROM_REDIS = String(process.env.LOAD_FROM_REDIS || "true").toLowerCase() === "true";
 const REDIS_FLUSH_BATCH = Math.max(Number(process.env.REDIS_DATA_FLUSH_BATCH || 100), 1);
 
 const userKey = (wallet) => docUserKey(wallet);
@@ -59,10 +58,7 @@ function materializeImageDoc(doc) {
   };
 }
 
-export const shouldLoadFromRedis = () => LOAD_FROM_REDIS;
-
 export async function readUserFromRedis(wallet) {
-  if (!LOAD_FROM_REDIS) return null;
   const cached = await redis.get(userKey(normalizeWallet(wallet)));
   return safeParse(cached);
 }
@@ -70,10 +66,8 @@ export async function readUserFromRedis(wallet) {
 export async function writeUserToRedis(doc, markDirty = false) {
   if (!doc || !doc.walletAddress) return null;
   const payload = materializeUserDoc(doc);
-  if (LOAD_FROM_REDIS) {
-    await redis.set(userKey(payload.walletAddress), JSON.stringify(payload));
-    if (markDirty) await redis.sadd(DIRTY_USERS_KEY, payload.walletAddress);
-  }
+  await redis.set(userKey(payload.walletAddress), JSON.stringify(payload));
+  if (markDirty) await redis.sadd(DIRTY_USERS_KEY, payload.walletAddress);
   return payload;
 }
 
@@ -102,14 +96,11 @@ export async function fetchUserProfile(wallet) {
   );
   if (!doc) return null;
   const materialized = materializeUserDoc(doc);
-  if (LOAD_FROM_REDIS) {
-    await redis.set(userKey(materialized.walletAddress), JSON.stringify(materialized));
-  }
+  await redis.set(userKey(materialized.walletAddress), JSON.stringify(materialized));
   return materialized;
 }
 
 export async function updateCachedUser(wallet, updater) {
-  if (!LOAD_FROM_REDIS) return null;
   const normWallet = normalizeWallet(wallet);
   let doc = await fetchUserProfile(normWallet);
   if (!doc) return null;
@@ -126,19 +117,15 @@ export async function updateCachedUser(wallet, updater) {
 export async function fetchImageMeta(hash) {
   const normHash = normalizeHash(hash);
   if (!normHash) return null;
-  if (LOAD_FROM_REDIS) {
-    const cached = safeParse(await redis.get(imageKey(normHash)));
-    if (cached?.imageId && cached?.label) return cached;
-  }
+  const cached = safeParse(await redis.get(imageKey(normHash)));
+  if (cached?.imageId && cached?.label) return cached;
   const doc = await images.findOne(
     { hash: normHash },
     { projection: { _id: 1, hash: 1, label: 1 } }
   );
   if (!doc) return null;
   const materialized = materializeImageDoc(doc);
-  if (LOAD_FROM_REDIS) {
-    await redis.set(imageKey(normHash), JSON.stringify(materialized));
-  }
+  await redis.set(imageKey(normHash), JSON.stringify(materialized));
   return materialized;
 }
 
@@ -158,14 +145,12 @@ export async function ensureImageMeta(docOrHash) {
 }
 
 export async function queueUserFlush(wallet) {
-  if (!LOAD_FROM_REDIS) return;
   const norm = normalizeWallet(wallet);
   if (!norm) return;
   await redis.sadd(DIRTY_USERS_KEY, norm);
 }
 
 export async function flushDirtyUsers(limit = REDIS_FLUSH_BATCH) {
-  if (!LOAD_FROM_REDIS) return { flushed: 0, skipped: true };
   const members = await redis.smembers(DIRTY_USERS_KEY);
   if (!members.length) return { flushed: 0 };
   const batch = members.slice(0, limit);
@@ -208,7 +193,6 @@ export async function flushDirtyUsers(limit = REDIS_FLUSH_BATCH) {
 }
 
 export async function startRedisFlushWorker() {
-  if (!LOAD_FROM_REDIS) return () => {};
   const intervalSec = Number(process.env.REDIS_DATA_FLUSH || 900);
   if (!intervalSec) return () => {};
   const timer = setInterval(() => {

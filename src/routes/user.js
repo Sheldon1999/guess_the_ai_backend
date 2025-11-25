@@ -5,16 +5,12 @@ import { protect } from "../middleware/jwt.js";
 import { recordUserRegistration } from "../lib/onchain/index.js";
 import {
   writeUserToRedis,
-  shouldLoadFromRedis,
   fetchUserProfile,
 } from "../lib/docCache.js";
 
 function normalizeWallet(w) {
   return String(w || "").trim().toLowerCase();
 }
-
-// case-insensitive 0x + 40 hex chars
-const WALLET_RE = /^0x[0-9a-z]{40}$/i;
 
 export default function userRoutes(app) {
 
@@ -86,7 +82,6 @@ export default function userRoutes(app) {
       // Generate JWT token with just the wallet address
       const token = await generateAuthToken({ _id: walletAddress, wallet:walletAddress,username});
 
-      if (shouldLoadFromRedis()) {
         const cacheDoc = isAccountExisted
           ? {
             ...isAccountExisted,
@@ -107,7 +102,6 @@ export default function userRoutes(app) {
             lastFlushedAt: now,
           };
         await writeUserToRedis(cacheDoc);
-      }
   
       return res.json({ success: true, data: { token, username,  nameUpdated: nameUpdated  } });
     } catch (e) {
@@ -178,10 +172,20 @@ export default function userRoutes(app) {
               currentStreak: 1, 
               streak: 1,
               rank: 1, 
-              dungeonTitle: 1
+              dungeonTitle: 1,
+              lastUpdatedAt: 1,
+              lastFlushedAt: 1,
             }
           }
         );
+
+          const cacheDoc = {
+            ...updatedUser,
+            lastUpdatedAt: updatedUser?.lastUpdatedAt || now,
+            lastFlushedAt: updatedUser?.lastFlushedAt || now,
+            nameUpdated: true,
+          };
+          await writeUserToRedis(cacheDoc, true);
   
         return res.json({ 
           success: true, 

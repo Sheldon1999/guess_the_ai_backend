@@ -13,10 +13,10 @@ import imageRoutes from "./routes/image.js";
 import userRoutes from "./routes/user.js";
 import gameRoutes from "./routes/game.js";
 import leaderboardRoutes from "./routes/leaderboard.js";
+import sessionRoutes from "./routes/session.js";
 
 import { warmOnBoot, startBackgroundTopup } from "./lib/warmup.js";
 import { startRedisFlushWorker } from "./lib/docCache.js";
-import { seedBackupQueue } from "./lib/backupQueue.js";
 import { attachPresenceWS } from "./ws/presence.js";
 
 const app = express();
@@ -57,6 +57,7 @@ if (process.env.ENABLE_CRASH_ENDPOINT === "true") {
 
 // Routes
 userRoutes(app);
+sessionRoutes(app);
 health(app);
 imageRoutes(app);
 gameRoutes(app);
@@ -67,11 +68,6 @@ attachPresenceWS(server);
 
 const port = Number(process.env.PORT || 3000);
 server.listen(port, () => console.log(`[server] listen: URL: http://localhost:${port}`));
-
-//to fill backup
-await seedBackupQueue()
-  .then((report) => console.log("[backup] queue: successfull: ", report))
-  .catch((err) => console.error("[backup] queue: error: ", err));
 
 // to fill in a single go
 await warmOnBoot().then(r => console.log("[warmup] successfull: ", r)).catch(e => console.error("[warmup] error: ", e));
