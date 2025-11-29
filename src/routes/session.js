@@ -37,7 +37,7 @@ async function clearSession(wallet) {
   await redis.del(sessionKeyForWallet(wallet));
 }
 
-const nowSec = () => Math.floor(Date.now() / 1000);
+// const nowSec = () => Math.floor(Date.now() / 1000);
 
 export function normalizeGuess(g) {
   const v = String(g || "")

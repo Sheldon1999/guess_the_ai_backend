@@ -25,8 +25,8 @@ export const WARM_LAST_KEY = withPrefix("warm:last");
 export const SESSION_TTL_SEC = Math.max(Number(process.env.GAME_SESSION_TTL_SEC || 3600), 60);
 export const PRESENCE_REDIS_TTL_SECONDS = Number(process.env.PRESENCE_REDIS_TTL_SECONDS || 3 * 24 * 3600);
 
-export function withKeyPrefix(suffix = "") {
-  return withPrefix(suffix);
-}
+// export function withKeyPrefix(suffix = "") {
+//   return withPrefix(suffix);
+// }
 
-export { REDIS_KEY_PREFIX };
+// export { REDIS_KEY_PREFIX };

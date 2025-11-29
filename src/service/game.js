@@ -1,48 +1,28 @@
-import { vrfIndexFromMessage, localRandomIndex } from "../lib/random.js";
+import { localRandomIndex } from "../lib/random.js";
 import redis from "../lib/redis.js";
 import { READY_QUEUE_KEY } from "../lib/redisKeys.js";
 import { images } from "../lib/mongo.js";
 import answerList from "../lib/backup_answer.js";
-import { randomUUID } from "crypto";
-
-const VRF_SECRET_KEY_B64 = process.env.VRF_SECRET_KEY_B64 || process.env.VRF_SECRET_KEY || "";
-
-const decodeVrfSecret = () => {
-  if (!VRF_SECRET_KEY_B64) return null;
+async function sampleIndexes(wallet, listLength, count = 1) {
   try {
-    return Buffer.from(VRF_SECRET_KEY_B64, "base64");
-  } catch {
-    return null;
-  }
-};
+    if (!Number.isInteger(listLength) || listLength <= 0) return [];
 
-async function sampleIndexes(wallet, listLength, count=1) {
-  if (!Number.isInteger(listLength) || listLength <= 0) return [];
-  const target = Math.min(count, listLength);
-  const secretKey = decodeVrfSecret();
-  const picked = new Set();
-  let attempts = 0;
-  const maxAttempts = listLength * 3;
+    const target = Math.min(count, listLength);
+    const picked = new Set();
+    const maxAttempts = listLength * 3;
+    let attempts = 0;
 
-  while (picked.size < target && attempts < maxAttempts) {
-    attempts += 1;
-    let idx;
-    if (secretKey) {
-      const seed = `${wallet || ""}-${Date.now()}-${picked.size}-${randomUUID()}`;
-      try {
-        const { index } = await vrfIndexFromMessage(secretKey, seed, listLength);
-        idx = index;
-      } catch (error) {
-        console.warn("vrf index sample failed, falling back to random", error?.message || error);
-        idx = localRandomIndex(listLength);
-      }
-    } else {
-      idx = localRandomIndex(listLength);
+    while (picked.size < target && attempts < maxAttempts) {
+      attempts += 1;
+      const idx = localRandomIndex(listLength);
+      picked.add(idx);
     }
-    picked.add(idx);
-  }
 
-  return Array.from(picked);
+    return Array.from(picked);
+  } catch (error) {
+    console.log("sampleIndexes error:", error);
+    return [];
+  }
 }
 
 async function fetchHashesByIndex(indexes) {
@@ -69,8 +49,10 @@ export async function pick10RandomHashes(wallet) {
         }
 
         const indexes = await sampleIndexes(wallet, listLength, 10);
+        console.log("indexes", indexes);
         if (!indexes.length) return { status: 204, body: null };
         const sampled = await fetchHashesByIndex(indexes);
+        console.log("{my sampled are ", sampled)
         if (!sampled.length) return { status: 204, body: null };
 
         const image_list = await Promise.all(
@@ -95,8 +77,9 @@ export async function pickBackupImage(wallet) {
   const listLength = answerList.length;
   if (!listLength) return { status: 204, body: null };
 
-  const idx = await sampleIndexes(wallet, listLength);
+  const [idx] = await sampleIndexes(wallet, listLength, 1);
   if (idx === null || idx === undefined) return { status: 204, body: null };
+
   const entry = answerList[idx];
   const name = entry?.file_name;
   if (!name) return { status: 204, body: null };
@@ -106,7 +89,7 @@ export async function pickBackupImage(wallet) {
     body: {
       imageId: name,
       hash: name,
-    url: `/api/img/h/${encodeURIComponent(name)}`,
-  },
-};
+      url: `/api/img/h/${encodeURIComponent(name)}`,
+    },
+  };
 }
