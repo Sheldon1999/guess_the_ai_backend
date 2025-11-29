@@ -93,7 +93,7 @@ export function deriveSessionKey(sessionId) {
   return keccak256(stringToBytes(sessionId));
 }
 
-export const isOnchainEnabled = () => Boolean(walletClient && publicClient);
+// export const isOnchainEnabled = () => Boolean(walletClient && publicClient);
 
 export async function recordUserRegistration({ walletAddress, username }) {
   if (!walletAddress) return { skipped: true, reason: "wallet-required" };

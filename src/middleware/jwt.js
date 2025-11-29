@@ -90,17 +90,17 @@ export const protect = async (req, res, next) => {
  * @param {...string} roles - Roles that are allowed to access the route
  * @returns {Function} Middleware function
  */
-export const restrictTo = (...roles) => {
-  return (req, res, next) => {
-    if (!roles.includes(req.user.role)) {
-      return res.status(403).json({
-        status: 'error',
-        message: 'You do not have permission to perform this action'
-      });
-    }
-    next();
-  };
-};
+// export const restrictTo = (...roles) => {
+//   return (req, res, next) => {
+//     if (!roles.includes(req.user.role)) {
+//       return res.status(403).json({
+//         status: 'error',
+//         message: 'You do not have permission to perform this action'
+//       });
+//     }
+//     next();
+//   };
+// };
 
 /**
  * Generates a JWT token for a user
