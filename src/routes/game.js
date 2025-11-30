@@ -5,6 +5,13 @@ import { fetchUserProfile } from "../lib/docCache.js";
 import { handleBackupAnswer, handleMongoAnswer, handleRedisAnswer } from "../service/answer.js";
 import { pick10RandomHashes, pickBackupImage } from "../service/game.js";
 
+function normalizeGuess(g) {
+    const v = String(g || "")
+        .trim()
+        .toLowerCase();
+    return v === "ai" || v === "human" ? v : null;
+}
+
 export default function gameRoutes(app) {
   app.post(
     "/api/game/next",
@@ -62,43 +69,49 @@ export default function gameRoutes(app) {
           return res.status(400).json({ error: "guess must be 'ai' or 'human'" });
         }
 
-        let profileResp, imageIdResp, truthResp;
+        let profileResp = null; 
+        let imageIdResp = null;
+        let truthResp = null;
+        let correctResp = null;
 
         let redisRunning = true;
         redis.on("error", () => { redisRunning = false });
+        let answerResult;
         if (redisRunning) {
           const isBackup = req.body.isBackup || false;
           if (isBackup) {
-            const { updatedProfile, imageId, truth } = handleBackupAnswer(walletAddress, hash, guess);
-            profileResp = updatedProfile;
-            imageIdResp = imageId;
-            truthResp = truth;
+            answerResult = await handleBackupAnswer(walletAddress, hash, guess);
           }
           else {
-            const { updatedProfile, imageId, truth } = handleRedisAnswer(walletAddress, hash, guess);
-            profileResp = updatedProfile;
-            imageIdResp = imageId;
-            truthResp = truth;
+            answerResult = await handleRedisAnswer(walletAddress, hash, guess);
           }
         } else {
-          const { updatedProfile, imageId, truth } = handleMongoAnswer(walletAddress, hash, guess);
-          profileResp = updatedProfile;
-          imageIdResp = imageId;
-          truthResp = truth;
+          answerResult = await handleMongoAnswer(walletAddress, hash, guess);
         }
+        if (!answerResult) {
+          return res.status(500).json({ error: "unable to process answer" });
+        }
+        profileResp = answerResult.profile;
+        imageIdResp = answerResult.imageId ?? hash;
+        truthResp = answerResult.truth;
+        correctResp = typeof answerResult.correct === "boolean"
+          ? answerResult.correct
+          : (truthResp ? guess === truthResp : null);
 
+        // console.log(profileResp);
         const profileResponse = {
-          username: profileResp.username,
-          correctAnswers: profileResp.correctAnswers,
-          currentStreak: profileResp.currentStreak,
-          streak: profileResp.streak,
-          rank: profileResp.rank,
-          dungeonTitle: profileResp.dungeonTitle,
+          username: profileResp?.username,
+          correctAnswers: profileResp?.correctAnswers,
+          currentStreak: profileResp?.currentStreak,
+          streak: profileResp?.streak,
+          rank: profileResp?.rank,
+          dungeonTitle: profileResp?.dungeonTitle,
         };
 
         return res.json({
-          correct,
-          truthResp,
+          correct: correctResp,
+          isCorrect: correctResp,
+          truth: truthResp,
           imageId: imageIdResp,
           hash,
           profile: profileResponse,
