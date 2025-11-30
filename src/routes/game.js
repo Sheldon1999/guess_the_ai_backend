@@ -18,7 +18,6 @@ export default function gameRoutes(app) {
     protect,
     async (req, res) => {
       try {
-        console.log(">>>> HI RJ")
         const wallet = req.user.walletAddress;
 
         // putting player data to redis for fast ans
