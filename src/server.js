@@ -47,14 +47,6 @@ app.use(morgan('short', {
   }
 }));
 
-if (process.env.ENABLE_CRASH_ENDPOINT === "true") {
-  app.post("/debug/crash", (req, res) => {
-    console.warn("Crash endpoint invoked via /debug/crash");
-    res.status(200).json({ status: "exiting" });
-    setTimeout(() => process.exit(1), 50);
-  });
-}
-
 // Routes
 userRoutes(app);
 sessionRoutes(app);
