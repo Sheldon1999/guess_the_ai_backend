@@ -49,10 +49,8 @@ export async function pick10RandomHashes(wallet) {
         }
 
         const indexes = await sampleIndexes(wallet, listLength, 10);
-        console.log("indexes", indexes);
         if (!indexes.length) return { status: 204, body: null };
         const sampled = await fetchHashesByIndex(indexes);
-        console.log("{my sampled are ", sampled)
         if (!sampled.length) return { status: 204, body: null };
 
         const image_list = await Promise.all(
