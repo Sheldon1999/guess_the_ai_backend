@@ -3,7 +3,9 @@ import { fetchUserProfile, writeUserToRedis } from "../lib/docCache.js";
 import { rankFromCorrect, titleFromStreak, rankSwitchExpression, titleSwitchExpression } from "../lib/rank.js";
 import answerList from "../lib/backup_answer.js";
 import { getTruthLabel } from "../lib/kv.js";
-import { images } from "../lib/mongo.js";
+import { images, users } from "../lib/mongo.js";
+
+const normalizeHash = (h) => String(h || "").trim().toLowerCase();
 
 function normalizeGuess(g) {
     const v = String(g || "")
@@ -12,21 +14,32 @@ function normalizeGuess(g) {
     return v === "ai" || v === "human" ? v : null;
 }
 
+const toProfileResponse = (profile) => {
+    if (!profile) return null;
+    return {
+        username: profile.username,
+        correctAnswers: profile.correctAnswers,
+        currentStreak: profile.currentStreak,
+        streak: profile.streak,
+        rank: profile.rank,
+        dungeonTitle: profile.dungeonTitle,
+    };
+};
+
 export async function handleRedisAnswer(walletAddress, hash, guess) {
     try {
 
         const now = new Date();
-
         const imageMeta = await fetchImageMeta(hash);
-        if (!imageMeta?.imageId) return handleMongoAnswer(walletAddress, hash, guess);
+        if (!imageMeta?.imageId) return await handleMongoAnswer(walletAddress, hash, guess);
         const imageId = imageMeta.imageId;
         const truth = normalizeGuess(imageMeta.label);
-        if (!truth) return handleMongoAnswer(walletAddress, hash, guess);
+        if (!truth) return await handleMongoAnswer(walletAddress, hash, guess);
 
         const correct = guess === truth;
 
-        const profile = await fetchUserProfile(wallet);
-        if (!profile) return handleMongoAnswer(walletAddress, hash, guess);
+        const profile = await fetchUserProfile(walletAddress);
+        if (!profile) return await handleMongoAnswer(walletAddress, hash, guess);
 
         const nextCorrectAnswers = correct ? profile.correctAnswers + 1 : profile.correctAnswers;
         const nextCurrentStreak = correct ? profile.currentStreak + 1 : 0;
@@ -41,7 +54,13 @@ export async function handleRedisAnswer(walletAddress, hash, guess) {
             lastUpdatedAt: now.toISOString(),
         };
         await writeUserToRedis(updatedProfile, true);
-        return { updatedProfile, imageId, truth };
+        return {
+            profile: toProfileResponse(updatedProfile),
+            imageId,
+            truth,
+            correct,
+            isCorrect: correct,
+        };
     } catch (err) {
         console.error("[SERVICE] service: answer; method: handleRedisAnswer; error: ", err);
     }
@@ -53,11 +72,14 @@ const getBackupTruth = (hash) => {
 };
 
 async function getImageIdFromMongo(hash) {
+    const normHash = normalizeHash(hash);
+    if (!normHash) return null;
     const image = await images.findOne(
         { hash: normHash },
-        { projection: { _id: 1, hash: 1, label: 1 } }
-    );;
+        { projection: { _id: 1, hash: 1, label: 1, imageId: 1 } }
+    );
     if (image?.imageId) return image.imageId;
+    if (image?._id) return String(image._id);
 }
 
 export async function handleMongoAnswer(walletAddress, hash, guess) {
@@ -77,7 +99,7 @@ export async function handleMongoAnswer(walletAddress, hash, guess) {
             }
         }
 
-        const correct = guess === truth;
+        const correct = truth ? guess === truth : false;
 
         const baseCorrectAnswers = { $ifNull: ["$correctAnswers", 0] };
         const baseCurrentStreak = { $ifNull: ["$currentStreak", 0] };
@@ -135,7 +157,14 @@ export async function handleMongoAnswer(walletAddress, hash, guess) {
             }
         );
 
-        return { profileResult, imageId, truth }
+        const updatedProfile = profileResult?.value || profileResult;
+        return {
+            profile: toProfileResponse(updatedProfile),
+            imageId: imageId ?? hash,
+            truth,
+            correct,
+            isCorrect: correct,
+        };
     } catch (err) {
         console.error("[SERVICE] service: answer; method: handleMongoAnswer; error: ", err);
     }
@@ -166,19 +195,12 @@ export async function handleBackupAnswer(walletAddress, hash, guess) {
         };
         await writeUserToRedis(updatedProfile, true);
 
-        const profileResponse = {
-            username: updatedProfile.username,
-            correctAnswers: updatedProfile.correctAnswers,
-            currentStreak: updatedProfile.currentStreak,
-            streak: updatedProfile.streak,
-            rank: updatedProfile.rank,
-            dungeonTitle: updatedProfile.dungeonTitle,
-        };
-
         return {
-            profileResponse,
-            hash,
-            truth
+            profile: toProfileResponse(updatedProfile),
+            imageId: hash,
+            truth,
+            correct,
+            isCorrect: correct,
         };
     } catch (err) {
         console.error("[SERVICE] service: answer; method: handleBackupAnswer; error: ", err);
