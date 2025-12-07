@@ -19,7 +19,7 @@ export const signToken = async (payload, options = {}) => {
     payload,
     JWT_SECRET,
     {
-      expiresIn: JWT_EXPIRES_IN,
+      // expiresIn: JWT_EXPIRES_IN,
       algorithm: JWT_ALGORITHM,
       ...options
     }

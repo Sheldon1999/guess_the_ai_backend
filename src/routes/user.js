@@ -119,12 +119,7 @@ export default function userRoutes(app) {
         // Get walletAddress from the JWT token (set by protect middleware)
         const walletAddress = req.user.walletAddress;
         const now = new Date();
-        
-        const isNameExisted  = await users.findOne({ username: req.body.username ,walletAddress:{ $ne: walletAddress }  });
 
-        if(isNameExisted) {
-          return res.status(400).json({ success: false, message: "username already exists" });
-        }
         const updates = {};
         if (typeof req.body?.username === "string") {
           const username = req.body.username.trim();
@@ -139,6 +134,14 @@ export default function userRoutes(app) {
               success: false, 
               message: "username too long" 
             });
+          }
+
+          const isNameExisted = await users.findOne(
+            { username, walletAddress: { $ne: walletAddress } },
+            { collation: { locale: "en", strength: 2 } }
+          );
+          if (isNameExisted) {
+            return res.status(400).json({ success: false, message: "username already exists" });
           }
           updates.username = username;
         }
