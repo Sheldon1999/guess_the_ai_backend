@@ -103,7 +103,7 @@ export async function startBackgroundTopup() {
   const periodSec = Number(process.env.PER_TOPUP_INTERVAL_SEC || 300);
   const pertopupTarget = Number(process.env.PER_TOPUP_TARGET) || 100;
   const id = setInterval(async () => {
-    try { const result = await runTopupFillRedis(pertopupTarget); console.log("[topup] success: ", result); } catch (e) { console.log("[topup] failed: error: ", e); }
+    try { const result = await runTopupFillRedis(pertopupTarget); } catch (e) { console.log("[topup] failed: error: ", e); }
   }, periodSec * 1000);
   return () => clearInterval(id);
 }
