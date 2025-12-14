@@ -4,6 +4,7 @@ import { promisify } from 'util';
 
 // Load environment variables
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
+const BROWSER_JWT_SECRET = process.env.BROWSER_JWT_SECRET || 'dev-secret-change-me';
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '7d';
 const JWT_ALGORITHM = 'HS256';
 
@@ -35,6 +36,17 @@ export const signToken = async (payload, options = {}) => {
 export const verifyToken = async (token) => {
   const verify = promisify(jwt.verify);
   return verify(token, JWT_SECRET, { algorithms: [JWT_ALGORITHM] });
+};
+
+/**
+ * Verifies and decodes a JWT token
+ * @param {string} token - The JWT token to verify
+ * @returns {Promise<Object>} The decoded token payload
+ * @throws {Error} If token is invalid or expired
+ */
+export const verifyBrowserToken = async (token) => {
+  const verify = promisify(jwt.verify);
+  return verify(token, BROWSER_JWT_SECRET, { algorithms: 'HS256' });
 };
 
 /**

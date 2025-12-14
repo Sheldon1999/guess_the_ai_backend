@@ -61,10 +61,11 @@ export async function warmFromMongo(limit) {
   const list = [];
   let newestId = lastId;
   for await (const doc of cursor) {
+    newestId = doc?._id || newestId;
+    if (doc?.isActive === false) continue; // skip inactive docs
     if (doc?.hash && typeof doc.hash === "string") {
       list.push(doc.hash.toLowerCase());
       await ensureImageMeta(doc).catch(() => {});
-      newestId = doc._id;
     }
   }
   const total = list.length;
@@ -78,7 +79,7 @@ export async function warmFromMongo(limit) {
       throw enqueueErr;
     }
   });
-  if (total > 0 && newestId) {
+  if (newestId) {
     await saveWarmCursor(newestId);
   }
   return { scanned: list.length, warmed: ok, failed: fail };
