@@ -1,6 +1,6 @@
 // src/routes/user
 import { users, dailyLogins } from "../lib/mongo.js";
-import { generateAuthToken } from "../middleware/jwt.js";
+import { generateAuthToken, verifyBrowserToken } from "../middleware/jwt.js";
 import { protect } from "../middleware/jwt.js";
 import { recordUserRegistration } from "../lib/onchain/index.js";
 import {
@@ -23,6 +23,115 @@ export default function userRoutes(app) {
       if (!walletAddress) {
         return res.status(400).json({ success: false, message: "invalid walletAddress" });
       }
+  
+      const isAccountExisted = await users.findOne({ walletAddress });
+      let username = '';
+      if (!isAccountExisted) {
+   
+        username = `Player_${Date.now()}`;
+    
+        const setOnInsert = {
+          walletAddress,
+          correctAnswers: 0,
+          currentStreak: 0,
+          streak: 0,
+          rank: "E",
+          dungeonTitle: "Newbie",
+          createdAt: now,
+          username,
+          nameUpdated:false,
+          lastUpdatedAt: now,
+          lastFlushedAt: now,
+        };
+
+        const set = {
+          updatedAt: now
+        };
+    
+        await users.updateOne(
+          { walletAddress },
+          { $setOnInsert: setOnInsert, $set: set },
+          { upsert: true }
+        );
+        recordUserRegistration({ walletAddress, username })
+          .catch((e) => console.error("onchain register error:", e));
+      }
+      else {
+        username = isAccountExisted?.username;
+      }
+      let nameUpdated = isAccountExisted?.nameUpdated ?? false;
+
+      const loginDay = new Date();
+      const dayStart = new Date(Date.UTC(
+        loginDay.getUTCFullYear(),
+        loginDay.getUTCMonth(),
+        loginDay.getUTCDate()
+      ));
+
+      await dailyLogins.updateOne(
+        { walletAddress, day: dayStart },
+        {
+          $setOnInsert: {
+            walletAddress,
+            day: dayStart,
+          },
+        },
+        { upsert: true }
+      );
+
+      // Generate JWT token with just the wallet address
+      const token = await generateAuthToken({ _id: walletAddress, wallet:walletAddress,username});
+
+        const cacheDoc = isAccountExisted
+          ? {
+            ...isAccountExisted,
+            walletAddress,
+            username,
+            lastUpdatedAt: isAccountExisted.lastUpdatedAt || now,
+            lastFlushedAt: isAccountExisted.lastFlushedAt || now,
+          }
+          : {
+            walletAddress,
+            username,
+            correctAnswers: 0,
+            currentStreak: 0,
+            streak: 0,
+            rank: "E",
+            dungeonTitle: "Newbie",
+            lastUpdatedAt: now,
+            lastFlushedAt: now,
+          };
+        await writeUserToRedis(cacheDoc);
+  
+      return res.json({ success: true, data: { token, username,  nameUpdated: nameUpdated  } });
+    } catch (e) {
+      console.error("user/login error:", e);
+      return res.status(500).json({ success: false, message: "internal error" });
+    }
+  });
+
+  app.post("/api/user/iframe-login", async (req, res) => {
+    try {
+      const jwt = req.body?.jwt;
+      const source = req.body?.source;
+
+      if(!source || (source !== "browser")) {
+        return res.status(401).json({ success: false, message: "invalid request" });
+      }
+
+      let walletAddress = "";
+      try{
+        const decodedData = await verifyBrowserToken(jwt);
+        walletAddress = decodedData?.walletAddress;
+        
+        if (!walletAddress) {
+          return res.status(400).json({ success: false, message: "invalid walletAddress" });
+        }
+      } catch (err) {
+        return res.status(400).json({ success: false, message: "invalid login" });
+      }
+
+      const now = new Date();
   
       const isAccountExisted = await users.findOne({ walletAddress });
       let username = '';
