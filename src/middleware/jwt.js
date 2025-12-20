@@ -98,23 +98,6 @@ export const protect = async (req, res, next) => {
 };
 
 /**
- * Middleware to restrict access to certain roles
- * @param {...string} roles - Roles that are allowed to access the route
- * @returns {Function} Middleware function
- */
-// export const restrictTo = (...roles) => {
-//   return (req, res, next) => {
-//     if (!roles.includes(req.user.role)) {
-//       return res.status(403).json({
-//         status: 'error',
-//         message: 'You do not have permission to perform this action'
-//       });
-//     }
-//     next();
-//   };
-// };
-
-/**
  * Generates a JWT token for a user
  * @param {Object} user - User object to include in the token
  * @returns {Promise<string>} The generated JWT token
@@ -128,56 +111,12 @@ export const generateAuthToken = async (user) => {
       username: user.username,
       role: user.role || 'user',
       // Add any other user data you want to include
-    },
-    {
-      expiresIn: JWT_EXPIRES_IN
     }
+    // ,
+    // {
+    //   expiresIn: JWT_EXPIRES_IN
+    // }
   );
 
   return token;
 };
-
-// Example usage in your auth controller:
-/*
-  // After successful authentication
-  const token = await generateAuthToken(user);
-  
-  // Send token to client
-  res.status(200).json({
-    status: 'success',
-    token,
-    data: {
-      user: {
-        id: user._id,
-        walletAddress: user.walletAddress,
-        username: user.username,
-        // other non-sensitive user data
-      }
-    }
-  });
-*/
-
-// Example protected route:
-/*
-  import { protect } from '../middleware/jwt';
-  
-  router.get('/protected-route', protect, (req, res) => {
-    // req.user contains the decoded token data
-    res.status(200).json({
-      status: 'success',
-      data: {
-        user: req.user
-      }
-    });
-  });
-*/
-
-// Example role-based route:
-/*
-  import { protect, restrictTo } from '../middleware/jwt';
-  
-  // Only users with 'admin' role can access this route
-  router.get('/admin-route', protect, restrictTo('admin'), (req, res) => {
-    // Your admin logic here
-  });
-*/
