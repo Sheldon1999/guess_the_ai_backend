@@ -1,20 +1,21 @@
-//src/routes/image
-import fs from "fs";
-import path from "path";
-import { Readable } from "stream";
-
-const BACKUP_CACHE_DIR = process.env.BACKUP_CACHE_DIR || "./cache/backup";
+const BACKUP_BASE_URL = (process.env.BACKUP_BASE_URL || "https://guess-the-ai.sfo3.cdn.digitaloceanspaces.com/game/cache/backup").replace(/\/+$/, "");
 
 export default function imageRoutes(app) {
   app.get("/api/img/h/:hash", async (req, res) => {
-    const raw = req.params?.hash || req.query?.hash || req.originalUrl.split("/").pop();
-    const hash = (raw || "").trim();
-    const filePath = path.join(BACKUP_CACHE_DIR, hash);
+    try {
+      const raw = req.params?.hash || req.query?.hash || req.originalUrl.split("/").pop();
+      const hash = (raw || "").trim();
+      if (!hash) {
+        return res.status(400).json({ error: "hash required" });
+      }
 
-      await fs.promises.access(filePath, fs.constants.R_OK);
-      const stat = await fs.promises.stat(filePath);
-      res.setHeader("Content-Length", stat.size);
-      res.setHeader("Content-Type", "application/octet-stream");
-      return fs.createReadStream(filePath).pipe(res);
+      if (BACKUP_BASE_URL) {
+        const fileName = hash.toLowerCase().endsWith(".jpg") ? hash : `${hash}.jpg`;
+        const target = `${BACKUP_BASE_URL}/${encodeURIComponent(fileName)}`;
+        return res.redirect(302, target);
+      }
+    } catch (err) {
+      return res.status(404).json({ error: "not found" });
+    }
   });
 }
