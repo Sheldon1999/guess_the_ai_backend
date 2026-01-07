@@ -18,6 +18,7 @@ export default function userRoutes(app) {
       const walletAddress = req.walletAddress;
       const isAccountExisted = await users.findOne({ walletAddress });
       let username = '';
+      const now = new Date();
       if (!isAccountExisted) {
    
         username = `Player_${Date.now()}`;
