@@ -4,6 +4,7 @@ import { protect } from '../middleware/jwt.js';
 import { fetchUserProfile } from "../lib/docCache.js";
 import { handleBackupAnswer, handleMongoAnswer, handleRedisAnswer } from "../service/answer.js";
 import { pick10RandomHashes, pickBackupImage } from "../service/game.js";
+import { gateWallets } from "../lib/mongo.js";
 
 function normalizeGuess(g) {
     const v = String(g || "")
@@ -121,4 +122,44 @@ export default function gameRoutes(app) {
       }
     }
   );
+
+  app.get(
+    "/api/game/isGateUserEligible",
+    protect,
+    async (req, res) => {
+      const walletAddress = req.user.walletAddress;
+      try {
+        const gateWallet = await gateWallets.findOne(
+          { walletAddress },
+          { projection: { _id: 0, hasAwarded: 1 } }
+        );
+
+        const isGateUserEligible = !Boolean(gateWallet?.hasAwarded);
+
+        return res.status(200).json({ success: true, isGateUserEligible });
+      } catch (err) {
+        console.error("[API] url: /api/game/hasGateUserAwarded; error: ", err);
+        return res.status(500).json({ error: "internal server error" });
+      }
+    }
+  );
+
+  app.put(
+    "/api/game/awardGateUser",
+    protect,
+    async (req, res) => {
+      const walletAddress = req.user.walletAddress;
+      try{
+        await gateWallets.updateOne(
+          { walletAddress },
+          { $set: { hasAwarded: true } }
+        );
+
+        res.status(200).json({ success: true });
+      } catch (err) {
+        console.error("[API] url: /api/game/awardGateWallet; error: ", err);
+        res.status(500).json({ error: "internal server error" });
+      }
+    }
+  )
 }
