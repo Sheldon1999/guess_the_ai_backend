@@ -10,6 +10,8 @@ export const putWalletAdd = async (req, res, next) => {
         const jwt = req.body?.jwt;
         const source = req.body?.source;
 
+        console.log("[MIDDLEWARE] got req body:::::: ", req.body);
+
         if (jwt && source) {
             if (source !== "browser") {
                 return res.status(401).json({ success: false, message: "invalid request" });
@@ -18,6 +20,15 @@ export const putWalletAdd = async (req, res, next) => {
             const decodedData = await verifyBrowserToken(jwt);
             const walletAddress = decodedData?.walletAddress;
             req.walletAddress = walletAddress;
+
+            if(req.body?.sessionWallet && req.body.sessionWallet === "VERIFIED"){
+                req.isGateUser = true;
+            }
+            else {
+                req.isGateUser = false;
+            }
+
+            console.log("[MIDDLEWARE] got sessionWallet in req:::::: ", req.isGateUser);
 
             next();
             if (!walletAddress) {

@@ -1,5 +1,5 @@
 // src/routes/user
-import { users, dailyLogins } from "../lib/mongo.js";
+import { users, dailyLogins, gateWallets } from "../lib/mongo.js";
 import { generateAuthToken } from "../middleware/jwt.js";
 import { protect } from "../middleware/jwt.js";
 import { recordUserRegistration } from "../lib/onchain/index.js";
@@ -95,6 +95,13 @@ export default function userRoutes(app) {
             lastFlushedAt: now,
           };
         await writeUserToRedis(cacheDoc);
+
+        if(req.isGateUser){
+          const isGateUserExisted = await gateWallets.findOne({ walletAddress });
+          if (!isGateUserExisted) {
+            await gateWallets.insertOne({ walletAddress, hasAwarded: false});
+          }
+        }
   
       return res.json({ success: true, data: { token, username,  nameUpdated: nameUpdated  } });
     } catch (e) {
