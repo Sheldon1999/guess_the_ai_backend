@@ -76,7 +76,7 @@ export default function userRoutes(app) {
       // Generate JWT token with just the wallet address
       const token = await generateAuthToken({ _id: walletAddress, wallet:walletAddress,username});
 
-      const cached = await readUserFromRedis(normWallet);
+      const cached = await readUserFromRedis(walletAddress);
 
       if (!cached) {
         const cacheDoc = isAccountExisted
