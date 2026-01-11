@@ -6,6 +6,7 @@ import { recordUserRegistration } from "../lib/onchain/index.js";
 import {
   writeUserToRedis,
   fetchUserProfile,
+  readUserFromRedis
 } from "../lib/docCache.js";
 import { putWalletAdd } from "../middleware/login.js";
 
@@ -75,6 +76,9 @@ export default function userRoutes(app) {
       // Generate JWT token with just the wallet address
       const token = await generateAuthToken({ _id: walletAddress, wallet:walletAddress,username});
 
+      const cached = await readUserFromRedis(normWallet);
+
+      if (!cached) {
         const cacheDoc = isAccountExisted
           ? {
             ...isAccountExisted,
@@ -95,6 +99,7 @@ export default function userRoutes(app) {
             lastFlushedAt: now,
           };
         await writeUserToRedis(cacheDoc);
+      }
 
         if(req.isGateUser){
           const isGateUserExisted = await gateWallets.findOne({ walletAddress });
