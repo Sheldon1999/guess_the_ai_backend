@@ -17,6 +17,11 @@ export default function userRoutes(app) {
     try {
 
       const walletAddress = req.walletAddress;
+      const privyMetaData = req.body?.privyMetaData;
+      const shouldStorePrivyMetaData = Boolean(
+        privyMetaData &&
+        typeof privyMetaData === "object"
+      );
       const isAccountExisted = await users.findOne({ walletAddress });
       let username = '';
       const now = new Date();
@@ -36,6 +41,7 @@ export default function userRoutes(app) {
           nameUpdated:false,
           lastUpdatedAt: now,
           lastFlushedAt: now,
+          ...(shouldStorePrivyMetaData ? { privyMetaData } : {}),
         };
 
         const set = {
@@ -49,9 +55,14 @@ export default function userRoutes(app) {
         );
         recordUserRegistration({ walletAddress, username })
           .catch((e) => console.error("onchain register error:", e));
-      }
-      else {
+      } else {
         username = isAccountExisted?.username;
+        if (shouldStorePrivyMetaData) {
+          await users.updateOne(
+            { walletAddress, privyMetaData: { $exists: false } },
+            { $set: { privyMetaData } }
+          );
+        }
       }
       let nameUpdated = isAccountExisted?.nameUpdated ?? false;
 
