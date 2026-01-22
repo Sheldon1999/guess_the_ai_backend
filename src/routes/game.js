@@ -149,7 +149,7 @@ export default function gameRoutes(app) {
     protect,
     async (req, res) => {
       const walletAddress = req.user.walletAddress;
-      try{
+      try {
         await gateWallets.updateOne(
           { walletAddress },
           { $set: { hasAwarded: true } }
@@ -165,7 +165,6 @@ export default function gameRoutes(app) {
 
   app.get(
     "/api/galaxy/check-user-registered",
-    protect,
     async (req, res) => {
       try {
         const address = String(req.query?.address || "").trim();
