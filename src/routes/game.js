@@ -7,10 +7,10 @@ import { pick10RandomHashes, pickBackupImage } from "../service/game.js";
 import { gateWallets, users } from "../lib/mongo.js";
 
 function normalizeGuess(g) {
-    const v = String(g || "")
-        .trim()
-        .toLowerCase();
-    return v === "ai" || v === "human" ? v : null;
+  const v = String(g || "")
+    .trim()
+    .toLowerCase();
+  return v === "ai" || v === "human" ? v : null;
 }
 
 export default function gameRoutes(app) {
@@ -69,7 +69,7 @@ export default function gameRoutes(app) {
           return res.status(400).json({ error: "guess must be 'ai' or 'human'" });
         }
 
-        let profileResp = null; 
+        let profileResp = null;
         let imageIdResp = null;
         let truthResp = null;
         let correctResp = null;
@@ -195,24 +195,30 @@ export default function gameRoutes(app) {
         );
 
         if (matchedUser) {
+
+          const currentStreak = matchedUser?.currentStreak;
+          let isEligible = false;
+          if (currentStreak == 5) {
+            isEligible = true;
+          }
           return res.status(200).json({
             message: "successful",
             code: 200,
-            data: { user_exists: true },
+            data: { is_eligible: isEligible },
           });
         }
 
         return res.status(404).json({
           message: "failed, user does not exist",
           code: 404,
-          data: { user_exists: false },
+          data: { is_eligible: false },
         });
       } catch (err) {
         console.error("[API] url: /api/galaxy/check-user-registered; error: ", err);
         return res.status(500).json({
           message: "internal error",
           code: 500,
-          data: { user_exists: false },
+          data: { is_eligible: false },
         });
       }
     }
