@@ -235,7 +235,11 @@ export default function gameRoutes(app) {
           { projection: { _id: 1 } }
         );
 
-        const isGalaxyUserEligible = Boolean(existingUser);
+        if (!existingUser) {
+          return res.status(200).json({ success: true, isGalaxyUserEligible: false });
+        }
+
+        const isGalaxyUserEligible = Boolean(existingUser?.currentStreak == 5);
 
         return res.status(200).json({ success: true, isGalaxyUserEligible });
       } catch (err) {
