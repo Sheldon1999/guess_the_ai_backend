@@ -13,7 +13,7 @@ import { putWalletAdd } from "../middleware/login.js";
 export default function userRoutes(app) {
 
   // REGISTER (create or update username if exists)
-  app.post("/api/user/login", putWalletAdd ,async (req, res) => {
+  app.post("/api/user/login", putWalletAdd, async (req, res) => {
     try {
 
       const walletAddress = req.walletAddress;
@@ -26,9 +26,9 @@ export default function userRoutes(app) {
       let username = '';
       const now = new Date();
       if (!isAccountExisted) {
-   
+
         username = `Player_${Date.now()}`;
-    
+
         const setOnInsert = {
           walletAddress,
           correctAnswers: 0,
@@ -38,7 +38,7 @@ export default function userRoutes(app) {
           dungeonTitle: "Newbie",
           createdAt: now,
           username,
-          nameUpdated:false,
+          nameUpdated: false,
           lastUpdatedAt: now,
           lastFlushedAt: now,
           ...(shouldStorePrivyMetaData ? { privyMetaData } : {}),
@@ -47,7 +47,7 @@ export default function userRoutes(app) {
         const set = {
           updatedAt: now
         };
-    
+
         await users.updateOne(
           { walletAddress },
           { $setOnInsert: setOnInsert, $set: set },
@@ -57,11 +57,11 @@ export default function userRoutes(app) {
           .catch((e) => console.error("onchain register error:", e));
       } else {
         username = isAccountExisted?.username;
-        existingPrivyMetaData = isAccountExisted?.privyMetaData || {};
+        let existingPrivyMetaData = isAccountExisted?.privyMetaData || {};
         if (shouldStorePrivyMetaData) {
           await users.updateOne(
             { walletAddress, privyMetaData: { $exists: false } },
-            { $set: { "privyMetaData": {  ...existingPrivyMetaData, ...privyMetaData } } }
+            { $set: { "privyMetaData": { ...existingPrivyMetaData, ...privyMetaData } } }
           );
         }
       }
@@ -86,7 +86,7 @@ export default function userRoutes(app) {
       );
 
       // Generate JWT token with just the wallet address
-      const token = await generateAuthToken({ _id: walletAddress, wallet:walletAddress,username});
+      const token = await generateAuthToken({ _id: walletAddress, wallet: walletAddress, username });
 
       const cached = await readUserFromRedis(walletAddress);
 
@@ -113,14 +113,14 @@ export default function userRoutes(app) {
         await writeUserToRedis(cacheDoc);
       }
 
-        if(req.isGateUser){
-          const isGateUserExisted = await gateWallets.findOne({ walletAddress });
-          if (!isGateUserExisted) {
-            await gateWallets.insertOne({ walletAddress, hasAwarded: false});
-          }
+      if (req.isGateUser) {
+        const isGateUserExisted = await gateWallets.findOne({ walletAddress });
+        if (!isGateUserExisted) {
+          await gateWallets.insertOne({ walletAddress, hasAwarded: false });
         }
-  
-      return res.json({ success: true, data: { token, username,  nameUpdated: nameUpdated  } });
+      }
+
+      return res.json({ success: true, data: { token, username, nameUpdated: nameUpdated } });
     } catch (e) {
       console.error("user/login error:", e);
       return res.status(500).json({ success: false, message: "internal error" });
@@ -129,7 +129,7 @@ export default function userRoutes(app) {
 
   // PATCH (username only)
   app.put(
-    "/api/user/updateUsername", 
+    "/api/user/updateUsername",
     protect,  // This will validate the JWT
     async (req, res) => {
       try {
@@ -141,15 +141,15 @@ export default function userRoutes(app) {
         if (typeof req.body?.username === "string") {
           const username = req.body.username.trim();
           if (!username) {
-            return res.status(400).json({ 
-              success: false, 
-              message: "username cannot be empty" 
+            return res.status(400).json({
+              success: false,
+              message: "username cannot be empty"
             });
           }
           if (username.length > 30) {
-            return res.status(400).json({ 
-              success: false, 
-              message: "username too long" 
+            return res.status(400).json({
+              success: false,
+              message: "username too long"
             });
           }
 
@@ -167,17 +167,17 @@ export default function userRoutes(app) {
         updates.lastFlushedAt = now;
         updates.nameUpdated = true;
         const result = await users.updateOne(
-          { walletAddress, }, 
+          { walletAddress, },
           { $set: updates }
         );
-        
+
         if (result.matchedCount === 0) {
-          return res.status(404).json({ 
-            success: false, 
-            message: "user not found" 
+          return res.status(404).json({
+            success: false,
+            message: "user not found"
           });
         }
-  
+
         // Return updated user data
         const updatedUser = await users.findOne(
           { walletAddress },
@@ -186,12 +186,12 @@ export default function userRoutes(app) {
               // _id: 1, 
               // createdAt: 1, 
               // updatedAt: 1
-              walletAddress:1,
-              username: 1, 
-              correctAnswers: 1, 
-              currentStreak: 1, 
+              walletAddress: 1,
+              username: 1,
+              correctAnswers: 1,
+              currentStreak: 1,
               streak: 1,
-              rank: 1, 
+              rank: 1,
               dungeonTitle: 1,
               lastUpdatedAt: 1,
               lastFlushedAt: 1,
@@ -199,23 +199,23 @@ export default function userRoutes(app) {
           }
         );
 
-          const cacheDoc = {
-            ...updatedUser,
-            lastUpdatedAt: updatedUser?.lastUpdatedAt || now,
-            lastFlushedAt: updatedUser?.lastFlushedAt || now,
-            nameUpdated: true,
-          };
-          await writeUserToRedis(cacheDoc, true);
-  
-        return res.json({ 
-          success: true, 
-          data: updatedUser 
+        const cacheDoc = {
+          ...updatedUser,
+          lastUpdatedAt: updatedUser?.lastUpdatedAt || now,
+          lastFlushedAt: updatedUser?.lastFlushedAt || now,
+          nameUpdated: true,
+        };
+        await writeUserToRedis(cacheDoc, true);
+
+        return res.json({
+          success: true,
+          data: updatedUser
         });
       } catch (e) {
         console.error("user/updateUsername error:", e);
-        return res.status(500).json({ 
-          success: false, 
-          message: "internal error" 
+        return res.status(500).json({
+          success: false,
+          message: "internal error"
         });
       }
     }
@@ -229,25 +229,25 @@ export default function userRoutes(app) {
       try {
         // Get walletAddress from the authenticated user's JWT
         const walletAddress = req.user.walletAddress;
-        
+
         const profile = await fetchUserProfile(walletAddress);
-        
+
         if (!profile) {
-          return res.status(404).json({ 
-            success: false, 
-            message: "user not found" 
+          return res.status(404).json({
+            success: false,
+            message: "user not found"
           });
         }
-        
-        return res.json({ 
-          success: true, 
-          data: profile 
+
+        return res.json({
+          success: true,
+          data: profile
         });
       } catch (e) {
         console.error("user/get error:", e);
-        return res.status(500).json({ 
-          success: false, 
-          message: "internal error" 
+        return res.status(500).json({
+          success: false,
+          message: "internal error"
         });
       }
     }
