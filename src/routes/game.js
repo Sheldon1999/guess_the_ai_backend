@@ -230,6 +230,10 @@ export default function gameRoutes(app) {
     async (req, res) => {
       const walletAddress = req.user.walletAddress;
       try {
+        const isFestRunning = process.env.GALAXY_FESTIVAL;
+        if (!isFestRunning) {
+          return res.status(200).json({ success: true, isGalaxyUserEligible: false });
+        }
         const existingUser = await users.findOne(
           { walletAddress },
           { projection: { _id: 1 } }
