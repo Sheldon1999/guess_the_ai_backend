@@ -57,10 +57,11 @@ export default function userRoutes(app) {
           .catch((e) => console.error("onchain register error:", e));
       } else {
         username = isAccountExisted?.username;
+        existingPrivyMetaData = isAccountExisted?.privyMetaData || {};
         if (shouldStorePrivyMetaData) {
           await users.updateOne(
             { walletAddress, privyMetaData: { $exists: false } },
-            { $set: { privyMetaData } }
+            { $set: { "privyMetaData": {  ...existingPrivyMetaData, ...privyMetaData } } }
           );
         }
       }
