@@ -239,9 +239,11 @@ export default function gameRoutes(app) {
           return res.status(200).json({ success: true, isGalaxyUserEligible: false });
         }
 
-        const isGalaxyUserEligible = Boolean(existingUser?.currentStreak == 5);
+        if(existingUser.currentStreak == existingUser?.streak && existingUser.currentStreak == 5) {
+          return res.status(200).json({ success: true, isGalaxyUserEligible: true });
+        }
 
-        return res.status(200).json({ success: true, isGalaxyUserEligible });
+        return res.status(200).json({ success: true, isGalaxyUserEligible: false });
       } catch (err) {
         console.error("[API] url: /api/game/isGalaxyUserEligible; error: ", err);
         return res.status(500).json({ error: "internal server error" });
