@@ -4,7 +4,7 @@ import { protect } from '../middleware/jwt.js';
 import { fetchUserProfile } from "../lib/docCache.js";
 import { handleBackupAnswer, handleMongoAnswer, handleRedisAnswer } from "../service/answer.js";
 import { pick10RandomHashes, pickBackupImage } from "../service/game.js";
-import { gateWallets } from "../lib/mongo.js";
+import { gateWallets, users } from "../lib/mongo.js";
 
 function normalizeGuess(g) {
     const v = String(g || "")
@@ -161,5 +161,82 @@ export default function gameRoutes(app) {
         res.status(500).json({ error: "internal server error" });
       }
     }
-  )
+  );
+
+  app.get(
+    "/api/galaxy/check-user-registered",
+    protect,
+    async (req, res) => {
+      try {
+        const address = String(req.query?.address || "").trim();
+        if (!address) {
+          return res.status(400).json({
+            message: "address required",
+            code: 400,
+            data: { user_exists: false },
+          });
+        }
+
+        const matchedUser = await users.findOne(
+          {
+            $expr: {
+              $in: [
+                address,
+                {
+                  $map: {
+                    input: { $objectToArray: { $ifNull: ["$privyMetaData", {}] } },
+                    as: "item",
+                    in: "$$item.v",
+                  },
+                },
+              ],
+            },
+          },
+          { projection: { _id: 1 } }
+        );
+
+        if (matchedUser) {
+          return res.status(200).json({
+            message: "successful",
+            code: 200,
+            data: { user_exists: true },
+          });
+        }
+
+        return res.status(404).json({
+          message: "failed, user does not exist",
+          code: 404,
+          data: { user_exists: false },
+        });
+      } catch (err) {
+        console.error("[API] url: /api/galaxy/check-user-registered; error: ", err);
+        return res.status(500).json({
+          message: "internal error",
+          code: 500,
+          data: { user_exists: false },
+        });
+      }
+    }
+  );
+
+  app.get(
+    "/api/game/isGalaxyUserEligible",
+    protect,
+    async (req, res) => {
+      const walletAddress = req.user.walletAddress;
+      try {
+        const existingUser = await users.findOne(
+          { walletAddress },
+          { projection: { _id: 1 } }
+        );
+
+        const isGalaxyUserEligible = Boolean(existingUser);
+
+        return res.status(200).json({ success: true, isGalaxyUserEligible });
+      } catch (err) {
+        console.error("[API] url: /api/game/isGalaxyUserEligible; error: ", err);
+        return res.status(500).json({ error: "internal server error" });
+      }
+    }
+  );
 }
