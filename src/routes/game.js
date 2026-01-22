@@ -164,7 +164,7 @@ export default function gameRoutes(app) {
   );
 
   app.get(
-    "/api/galaxy/check-user-registered",
+    "/api/galaxy/check-galaxy-reward-eligibility",
     async (req, res) => {
       try {
         const address = String(req.query?.address || "").trim();
