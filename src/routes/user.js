@@ -1,7 +1,6 @@
 // src/routes/user
 import { users, dailyLogins, gateWallets } from "../lib/mongo.js";
-import { generateAuthToken } from "../middleware/jwt.js";
-import { protect } from "../middleware/jwt.js";
+import { generateAuthToken, protect } from "../middleware/jwt.js";
 import { recordUserRegistration } from "../lib/onchain/index.js";
 import {
   writeUserToRedis,
@@ -9,8 +8,25 @@ import {
   readUserFromRedis
 } from "../lib/docCache.js";
 import { putWalletAdd } from "../middleware/login.js";
+import { loginV2 } from "../services/auth.js";
 
 export default function userRoutes(app) {
+
+  // V2 LOGIN (Privy-aware)
+  app.post("/api/v2/login", async (req, res) => {
+    try {
+      const data = await loginV2(req.body);
+      return res.json({ success: true, data });
+    } catch (e) {
+      const statusCode = Number(e?.statusCode) || 500;
+      if (statusCode >= 500) {
+        console.error("v2/login error:", e);
+      }
+      const payload = { success: false, message: e?.message || "internal error" };
+      if (e?.code) payload.code = e.code;
+      return res.status(statusCode).json(payload);
+    }
+  });
 
   // REGISTER (create or update username if exists)
   app.post("/api/user/login", putWalletAdd, async (req, res) => {
