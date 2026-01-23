@@ -10,7 +10,7 @@
     "topup:file": "node tools/topup-from-file.mjs ./hashes.txt 200"
   },
   "dependencies": {
-    "@privy-io/node": "^0.16.0",
+    "@privy-io/node": "0.15.2",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
