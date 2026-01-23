@@ -172,7 +172,7 @@ export default function gameRoutes(app) {
           return res.status(400).json({
             message: "address required",
             code: 400,
-            data: { user_exists: false },
+            data: { is_eligible: false },
           });
         }
 
