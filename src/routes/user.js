@@ -31,6 +31,7 @@ export default function userRoutes(app) {
 
         const setOnInsert = {
           walletAddress,
+          walletAddressOriginal: req.rawWalletAddress || req.body?.walletAddress || walletAddress,
           correctAnswers: 0,
           currentStreak: 0,
           streak: 0,
@@ -127,41 +128,31 @@ export default function userRoutes(app) {
     }
   });
 
-  // PATCH (username only)
   app.put(
     "/api/user/updateUsername",
-    protect,  // This will validate the JWT
+    protect,
     async (req, res) => {
       try {
-        // Get walletAddress from the JWT token (set by protect middleware)
         const walletAddress = req.user.walletAddress;
         const now = new Date();
+        const nowIso = now.toISOString();
+
+        const username = req.body.username.trim();
+        if (!username) {
+          return res.status(400).json({
+            success: false,
+            message: "username cannot be empty"
+          });
+        }
+        if (username.length > 30) {
+          return res.status(400).json({
+            success: false,
+            message: "username too long"
+          });
+        }
 
         const updates = {};
-        if (typeof req.body?.username === "string") {
-          const username = req.body.username.trim();
-          if (!username) {
-            return res.status(400).json({
-              success: false,
-              message: "username cannot be empty"
-            });
-          }
-          if (username.length > 30) {
-            return res.status(400).json({
-              success: false,
-              message: "username too long"
-            });
-          }
-
-          const isNameExisted = await users.findOne(
-            { username, walletAddress: { $ne: walletAddress } },
-            { collation: { locale: "en", strength: 2 } }
-          );
-          if (isNameExisted) {
-            return res.status(400).json({ success: false, message: "username already exists" });
-          }
-          updates.username = username;
-        }
+        updates.username = username;
         updates.updatedAt = now;
         updates.lastUpdatedAt = now;
         updates.lastFlushedAt = now;
@@ -178,38 +169,53 @@ export default function userRoutes(app) {
           });
         }
 
-        // Return updated user data
-        const updatedUser = await users.findOne(
-          { walletAddress },
-          {
-            projection: {
-              // _id: 1, 
-              // createdAt: 1, 
-              // updatedAt: 1
-              walletAddress: 1,
-              username: 1,
-              correctAnswers: 1,
-              currentStreak: 1,
-              streak: 1,
-              rank: 1,
-              dungeonTitle: 1,
-              lastUpdatedAt: 1,
-              lastFlushedAt: 1,
+        let responseUser = null;
+        const cachedUser = await readUserFromRedis(walletAddress);
+        if (cachedUser) {
+          const cacheDoc = {
+            ...cachedUser,
+            ...(updates.username ? { username: updates.username } : {}),
+            lastUpdatedAt: nowIso,
+            lastFlushedAt: cachedUser.lastFlushedAt || cachedUser.lastUpdatedAt,
+          };
+          responseUser = await writeUserToRedis(cacheDoc, true);
+        } else {
+          const updatedUser = await users.findOne(
+            { walletAddress },
+            {
+              projection: {
+                // _id: 1,
+                // createdAt: 1,
+                // updatedAt: 1
+                walletAddress: 1,
+                username: 1,
+                correctAnswers: 1,
+                currentStreak: 1,
+                streak: 1,
+                rank: 1,
+                dungeonTitle: 1,
+                lastUpdatedAt: 1,
+                lastFlushedAt: 1,
+              }
             }
+          );
+          if (!updatedUser) {
+            return res.status(404).json({
+              success: false,
+              message: "user not found"
+            });
           }
-        );
-
-        const cacheDoc = {
-          ...updatedUser,
-          lastUpdatedAt: updatedUser?.lastUpdatedAt || now,
-          lastFlushedAt: updatedUser?.lastFlushedAt || now,
-          nameUpdated: true,
-        };
-        await writeUserToRedis(cacheDoc, true);
+          const cacheDoc = {
+            ...updatedUser,
+            lastUpdatedAt: updatedUser?.lastUpdatedAt || now,
+            lastFlushedAt: updatedUser?.lastFlushedAt || now,
+          };
+          responseUser = await writeUserToRedis(cacheDoc, true);
+        }
 
         return res.json({
           success: true,
-          data: updatedUser
+          data: responseUser
         });
       } catch (e) {
         console.error("user/updateUsername error:", e);
