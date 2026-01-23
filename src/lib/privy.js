@@ -1,4 +1,4 @@
-import { PrivyClient } from "@privy-io/node";
+import { PrivyClient } from "@privy-io/server-auth";
 
 const PRIVY_APP_ID = process.env.PRIVY_CLIENT_ID || process.env.PRIVY_APP_ID;
 const PRIVY_SECRET = process.env.PRIVY_SECRET_KEY || process.env.PRIVY_APP_SECRET;
