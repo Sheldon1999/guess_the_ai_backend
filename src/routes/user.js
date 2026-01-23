@@ -17,6 +17,7 @@ export default function userRoutes(app) {
     try {
 
       const walletAddress = req.walletAddress;
+      const walletAddressOriginal = req.rawWalletAddress || walletAddress;
       const privyMetaData = req.body?.privyMetaData;
       const shouldStorePrivyMetaData = Boolean(
         privyMetaData &&
@@ -31,7 +32,7 @@ export default function userRoutes(app) {
 
         const setOnInsert = {
           walletAddress,
-          walletAddressOriginal: req.rawWalletAddress || req.body?.walletAddress || walletAddress,
+          walletAddressOriginal,
           correctAnswers: 0,
           currentStreak: 0,
           streak: 0,
@@ -63,6 +64,12 @@ export default function userRoutes(app) {
           await users.updateOne(
             { walletAddress, privyMetaData: { $exists: false } },
             { $set: { "privyMetaData": { ...existingPrivyMetaData, ...privyMetaData } } }
+          );
+        }
+        if (!isAccountExisted?.walletAddressOriginal) {
+          await users.updateOne(
+            { walletAddress, walletAddressOriginal: { $exists: false } },
+            { $set: { walletAddressOriginal } }
           );
         }
       }
