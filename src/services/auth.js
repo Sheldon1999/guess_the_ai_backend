@@ -36,7 +36,7 @@ const summarizeMeta = (meta) => {
 };
 
 const logV2 = (level, stage, data) => {
-  if (!DEBUG_V2_LOGIN) return;
+  // if (!DEBUG_V2_LOGIN) return;
   const prefix = `[v2/login] ${stage}`;
   if (level === "error") {
     console.error(prefix, data);
