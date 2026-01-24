@@ -169,9 +169,9 @@ export default function gameRoutes(app) {
       try {
         const address = String(req.query?.address || "").trim();
         if (!address) {
-          return res.status(400).json({
+          return res.status(200).json({
             message: "address required",
-            code: 400,
+            code: 200,
             data: { is_eligible: false },
           });
         }
@@ -208,16 +208,16 @@ export default function gameRoutes(app) {
           });
         }
 
-        return res.status(404).json({
+        return res.status(200).json({
           message: "failed, user does not exist",
-          code: 404,
+          code: 200,
           data: { is_eligible: false },
         });
       } catch (err) {
         console.error("[API] url: /api/galaxy/check-user-registered; error: ", err);
-        return res.status(500).json({
+        return res.status(204).json({
           message: "internal error",
-          code: 500,
+          code: 204,
           data: { is_eligible: false },
         });
       }
