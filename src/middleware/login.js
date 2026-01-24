@@ -18,8 +18,12 @@ export const putWalletAdd = async (req, res, next) => {
             }
 
             const decodedData = await verifyBrowserToken(jwt);
-            const walletAddress = decodedData?.walletAddress;
-            req.walletAddress = walletAddress;
+            const rawWalletAddress = String(decodedData?.walletAddress || "").trim();
+            if (!rawWalletAddress) {
+                return res.status(400).json({ success: false, message: "invalid walletAddress" });
+            }
+            req.rawWalletAddress = rawWalletAddress;
+            req.walletAddress = normalizeWallet(req.rawWalletAddress);
 
             if(req.body?.sessionWallet && req.body.sessionWallet === "VERIFIED"){
                 req.isGateUser = true;
@@ -31,15 +35,13 @@ export const putWalletAdd = async (req, res, next) => {
             console.log("[MIDDLEWARE] got sessionWallet in req:::::: ", req.isGateUser);
 
             next();
-            if (!walletAddress) {
-                return res.status(400).json({ success: false, message: "invalid walletAddress" });
-            }
         } else {
-            const walletAddress = normalizeWallet(req.body?.walletAddress);
-            if (!walletAddress) {
+            const rawWalletAddress = String(req.body?.walletAddress || "").trim();
+            if (!rawWalletAddress) {
                 return res.status(400).json({ success: false, message: "invalid walletAddress" });
             }
-            req.walletAddress = walletAddress;
+            req.rawWalletAddress = rawWalletAddress;
+            req.walletAddress = normalizeWallet(rawWalletAddress);
 
             next();
         }
