@@ -12,6 +12,7 @@ const DOC_PREFIX = withPrefix("mongodoc:");
 export const DIRTY_USERS_KEY = `${DOC_PREFIX}dirty-users`;
 export const docUserKey = (wallet) => `${DOC_PREFIX}user:${wallet}`;
 export const docImageKey = (hash) => `${DOC_PREFIX}image:${hash}`;
+export const docGateUserKey = (wallet) => `${withPrefix("campaign:GateWallet:")}${wallet}`;
 
 // Presence namespace
 const PRESENCE_PREFIX = withPrefix("presence:");

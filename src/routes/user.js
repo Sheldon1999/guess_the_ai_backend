@@ -9,6 +9,7 @@ import {
 } from "../lib/docCache.js";
 import { putWalletAdd } from "../middleware/login.js";
 import { loginV2 } from "../services/auth.js";
+import { getGateUserRedis, updateGateUsernameRedis } from "../services/gate.js";
 
 export default function userRoutes(app) {
 
@@ -239,6 +240,12 @@ export default function userRoutes(app) {
           responseUser = await writeUserToRedis(cacheDoc, true);
         }
 
+        const cachedGateUser = await getGateUserRedis(walletAddress);
+        if(cachedGateUser){
+          await updateGateUsernameRedis(walletAddress, username);
+          responseUser = await getGateUserRedis(walletAddress);
+        }
+
         return res.json({
           success: true,
           data: responseUser
@@ -262,13 +269,18 @@ export default function userRoutes(app) {
         // Get walletAddress from the authenticated user's JWT
         const walletAddress = req.user.walletAddress;
 
-        const profile = await fetchUserProfile(walletAddress);
+        let profile = await fetchUserProfile(walletAddress);
 
         if (!profile) {
           return res.status(404).json({
             success: false,
             message: "user not found"
           });
+        }
+
+        const cachedGateUser = await getGateUserRedis(walletAddress);
+        if(cachedGateUser){
+          profile = await getGateUserRedis(walletAddress);
         }
 
         return res.json({

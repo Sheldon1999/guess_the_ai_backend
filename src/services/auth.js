@@ -4,6 +4,7 @@ import { generateAuthToken, verifyBrowserToken } from "../middleware/jwt.js";
 import { recordUserRegistration } from "../lib/onchain/index.js";
 import { readUserFromRedis, writeUserToRedis } from "../lib/docCache.js";
 import { createEmbeddedWalletForUser, getWalletById, isPrivyConfigured } from "../lib/privy.js";
+import { createGateUserRedis } from "./gate.js";
 
 const isPlainObject = (value) => Boolean(value) && typeof value === "object" && !Array.isArray(value);
 
@@ -681,7 +682,8 @@ export async function loginV2(payload, options = {}) {
 
   const isGateUserExisted = await gateWallets.findOne({ walletToCreate });
   if (!isGateUserExisted) {
-    await gateWallets.insertOne({ hasAwarded: false, responseUser });
+    await gateWallets.insertOne({ hasAwarded: false, privyMetaToStore });
+    await createGateUserRedis(walletToCreate, username);
   }
 
   return {
