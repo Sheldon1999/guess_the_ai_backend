@@ -137,12 +137,15 @@ export default function userRoutes(app) {
         await writeUserToRedis(cacheDoc);
       }
 
-      if (req.isGateUser) {
-        const isGateUserExisted = await gateWallets.findOne({ walletAddress });
-        if (!isGateUserExisted) {
-          await gateWallets.insertOne({ walletAddress, hasAwarded: false });
-        }
-      }
+      const loginType = String(req.body?.privyMetaData?.type || "Unknown").trim();
+      await gateWallets.updateOne(
+        { walletAddress },
+        {
+          $setOnInsert: { walletAddress, hasAwarded: false },
+          $addToSet: { loginTypes: loginType }
+        },
+        { upsert: true }
+      );
 
       return res.json({ success: true, data: { token, username, nameUpdated: nameUpdated } });
     } catch (e) {

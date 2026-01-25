@@ -25,15 +25,6 @@ export const putWalletAdd = async (req, res, next) => {
             req.rawWalletAddress = rawWalletAddress;
             req.walletAddress = normalizeWallet(req.rawWalletAddress);
 
-            if(req.body?.sessionWallet && req.body.sessionWallet === "VERIFIED"){
-                req.isGateUser = true;
-            }
-            else {
-                req.isGateUser = false;
-            }
-
-            console.log("[MIDDLEWARE] got sessionWallet in req:::::: ", req.isGateUser);
-
             next();
         } else {
             const rawWalletAddress = String(req.body?.walletAddress || "").trim();
