@@ -131,11 +131,10 @@ export default function gameRoutes(app) {
       try {
         const gateWallet = await gateWallets.findOne(
           { walletAddress },
-          { projection: { _id: 0, hasAwarded: 1, loginTypes: 1 } }
+          { projection: { _id: 0, hasAwarded: 1, "privyMetaData.type": 1 } }
         );
 
-        const hasGateLoginType = Array.isArray(gateWallet?.loginTypes)
-          && gateWallet.loginTypes.includes("gate_wallet");
+        const hasGateLoginType = gateWallet?.privyMetaData?.type === "gate_wallet";
         const isGateUserEligible = Boolean(gateWallet)
           && !gateWallet?.hasAwarded
           && hasGateLoginType;
