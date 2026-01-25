@@ -2,7 +2,7 @@ import redis from "./redis.js";
 import { users, images } from "./mongo.js";
 import { rankFromCorrect, titleFromStreak } from "./rank.js";
 import { DIRTY_USERS_KEY, docImageKey, docUserKey } from "./redisKeys.js";
-import { updateGateWalletCollection } from "../services/gate.js";
+import { flushGateUsers } from "../services/gate.js";
 
 const REDIS_FLUSH_BATCH = Math.max(Number(process.env.REDIS_DATA_FLUSH_BATCH || 100), 1);
 
@@ -185,7 +185,6 @@ export async function flushDirtyUsers(limit = REDIS_FLUSH_BATCH) {
       { $set: payload },
       { upsert: true }
     );
-    await updateGateWalletCollection(snapshot);
     snapshot.lastFlushedAt = payload.lastFlushedAt;
     await redis.set(key, JSON.stringify(snapshot));
     await redis.srem(DIRTY_USERS_KEY, wallet);
@@ -196,9 +195,21 @@ export async function flushDirtyUsers(limit = REDIS_FLUSH_BATCH) {
 
 export async function startRedisFlushWorker() {
   const intervalSec = Number(process.env.REDIS_DATA_FLUSH || 900);
-  if (!intervalSec) return () => {};
-  const timer = setInterval(() => {
-    flushDirtyUsers().catch((err) => console.error("redis flush error:", err));
-  }, intervalSec * 1000);
-  return () => clearInterval(timer);
+  const intervalSecGate = Number(process.env.REDIS_DATA_FLUSH_GATE || 900);
+  let timer = null;
+  let timerGate = null;
+  if (intervalSec > 0) {
+    timer = setInterval(() => {
+      flushDirtyUsers().catch((err) => console.error("redis flush error:", err));
+    }, intervalSec * 1000);
+  }
+  if (intervalSecGate > 0) {
+    timerGate = setInterval(() => {
+      flushGateUsers().catch((err) => console.error("redis gate flush error:", err));
+    }, intervalSecGate * 1000);
+  }
+  return () => {
+    if (timer) clearInterval(timer);
+    if (timerGate) clearInterval(timerGate);
+  };
 }

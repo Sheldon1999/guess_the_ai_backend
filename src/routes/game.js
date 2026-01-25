@@ -5,6 +5,7 @@ import { fetchUserProfile } from "../lib/docCache.js";
 import { handleBackupAnswer, handleMongoAnswer, handleRedisAnswer } from "../service/answer.js";
 import { pick10RandomHashes, pickBackupImage } from "../service/game.js";
 import { gateWallets, users } from "../lib/mongo.js";
+import { getGateUserRedis, updateGateUserScoreRedis } from "../services/gate.js";
 
 function normalizeGuess(g) {
   const v = String(g || "")
@@ -99,7 +100,7 @@ export default function gameRoutes(app) {
           : (truthResp ? guess === truthResp : null);
 
         // console.log(profileResp);
-        const profileResponse = {
+        let profileResponse = {
           username: profileResp?.username,
           correctAnswers: profileResp?.correctAnswers,
           currentStreak: profileResp?.currentStreak,
@@ -107,6 +108,12 @@ export default function gameRoutes(app) {
           rank: profileResp?.rank,
           dungeonTitle: profileResp?.dungeonTitle,
         };
+
+        const cachedGateUser = await getGateUserRedis(walletAddress);
+        if(cachedGateUser){
+          await updateGateUserScoreRedis(walletAddress, correctResp);
+          profileResp = await getGateUserRedis(walletAddress);
+        }
 
         return res.json({
           correct: correctResp,
