@@ -679,6 +679,11 @@ export async function loginV2(payload, options = {}) {
     nameUpdated: false
   });
 
+  const isGateUserExisted = await gateWallets.findOne({ walletToCreate });
+  if (!isGateUserExisted) {
+    await gateWallets.insertOne({ hasAwarded: false, responseUser });
+  }
+
   return {
     token,
     username,

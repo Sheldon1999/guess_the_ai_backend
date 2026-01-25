@@ -131,10 +131,14 @@ export default function gameRoutes(app) {
       try {
         const gateWallet = await gateWallets.findOne(
           { walletAddress },
-          { projection: { _id: 0, hasAwarded: 1 } }
+          { projection: { _id: 0, hasAwarded: 1, loginTypes: 1 } }
         );
 
-        const isGateUserEligible = !Boolean(gateWallet?.hasAwarded);
+        const hasGateLoginType = Array.isArray(gateWallet?.loginTypes)
+          && gateWallet.loginTypes.includes("gate_wallet");
+        const isGateUserEligible = Boolean(gateWallet)
+          && !gateWallet?.hasAwarded
+          && hasGateLoginType;
 
         return res.status(200).json({ success: true, isGateUserEligible });
       } catch (err) {
@@ -197,6 +201,7 @@ export default function gameRoutes(app) {
         if (matchedUser) {
 
           const currentStreak = matchedUser?.currentStreak;
+          
           let isEligible = false;
           if (currentStreak == 5) {
             isEligible = true;

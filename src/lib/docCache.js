@@ -2,6 +2,7 @@ import redis from "./redis.js";
 import { users, images } from "./mongo.js";
 import { rankFromCorrect, titleFromStreak } from "./rank.js";
 import { DIRTY_USERS_KEY, docImageKey, docUserKey } from "./redisKeys.js";
+import { updateGateWalletCollection } from "../services/gate.js";
 
 const REDIS_FLUSH_BATCH = Math.max(Number(process.env.REDIS_DATA_FLUSH_BATCH || 100), 1);
 
@@ -184,6 +185,7 @@ export async function flushDirtyUsers(limit = REDIS_FLUSH_BATCH) {
       { $set: payload },
       { upsert: true }
     );
+    await updateGateWalletCollection(snapshot);
     snapshot.lastFlushedAt = payload.lastFlushedAt;
     await redis.set(key, JSON.stringify(snapshot));
     await redis.srem(DIRTY_USERS_KEY, wallet);
