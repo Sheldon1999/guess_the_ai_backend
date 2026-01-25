@@ -49,6 +49,31 @@ export const verifyBrowserToken = async (token) => {
   return verify(token, BROWSER_JWT_SECRET, { algorithms: 'HS256' });
 };
 
+const normalizeWallet = (value) => String(value || "").trim().toLowerCase();
+
+// Optionally decode browser JWT for /v2/login flows and attach the wallet to the request.
+export const decodeBrowserJwtOptional = async (req, res, next) => {
+  req.walletFromJwt = "";
+  const jwtToken = req.body?.jwt;
+  if (!jwtToken) return next();
+
+  if (req.body?.source !== "browser") {
+    return res.status(401).json({ success: false, message: "invalid request" });
+  }
+
+  try {
+    const decodedData = await verifyBrowserToken(jwtToken);
+    const walletFromJwt = normalizeWallet(decodedData?.walletAddress);
+    if (!walletFromJwt) {
+      return res.status(400).json({ success: false, message: "invalid walletAddress" });
+    }
+    req.walletFromJwt = walletFromJwt;
+    return next();
+  } catch {
+    return res.status(401).json({ success: false, message: "invalid token" });
+  }
+};
+
 /**
  * Middleware to protect routes by verifying JWT token
  * Attaches the decoded user to the request object

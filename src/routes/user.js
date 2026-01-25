@@ -1,6 +1,6 @@
 // src/routes/user
 import { users, dailyLogins, gateWallets } from "../lib/mongo.js";
-import { generateAuthToken, protect } from "../middleware/jwt.js";
+import { decodeBrowserJwtOptional, generateAuthToken, protect } from "../middleware/jwt.js";
 import { recordUserRegistration } from "../lib/onchain/index.js";
 import {
   writeUserToRedis,
@@ -13,9 +13,9 @@ import { loginV2 } from "../services/auth.js";
 export default function userRoutes(app) {
 
   // V2 LOGIN (Privy-aware)
-  app.post("/api/v2/login", async (req, res) => {
+  app.post("/api/v2/login", decodeBrowserJwtOptional, async (req, res) => {
     try {
-      const data = await loginV2(req.body);
+      const data = await loginV2(req.body, { walletFromJwt: req.walletFromJwt });
       return res.json({ success: true, data });
     } catch (e) {
       const statusCode = Number(e?.statusCode) || 500;
