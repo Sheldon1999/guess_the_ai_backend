@@ -115,7 +115,7 @@ export default function gameRoutes(app) {
           await updateGateUserScoreRedis(walletAddress, correctResp);
           profileResp = await getGateUserRedis(walletAddress);
         }
-        
+
 
         return res.json({
           correct: correctResp,
@@ -243,10 +243,10 @@ export default function gameRoutes(app) {
     async (req, res) => {
       const walletAddress = req.user.walletAddress;
       try {
-        const isFestRunning = process.env.GALAXY_FESTIVAL;
-        if (!isFestRunning) {
-          return res.status(200).json({ success: true, isGalaxyUserEligible: false });
-        }
+        // const isFestRunning = process.env.GALAXY_FESTIVAL;
+        // if (!isFestRunning) {
+        //   return res.status(200).json({ success: true, isGalaxyUserEligible: false });
+        // }
         const existingUser = await users.findOne(
           { walletAddress },
           { projection: { _id: 1 } }
@@ -256,7 +256,7 @@ export default function gameRoutes(app) {
           return res.status(200).json({ success: true, isGalaxyUserEligible: false });
         }
 
-        if(existingUser.currentStreak == existingUser?.streak && existingUser.currentStreak == 5) {
+        if( existingUser.currentStreak >= 5) {
           return res.status(200).json({ success: true, isGalaxyUserEligible: true });
         }
 
