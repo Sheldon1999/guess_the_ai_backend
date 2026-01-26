@@ -117,7 +117,7 @@ export default function gameRoutes(app) {
         if (cachedGateUser) {
           await updateGateUserScoreRedis(walletAddress, correctResp);
           profileResp = await getGateUserRedis(walletAddress);
-          profileResponse = buildProfileResponse(profileResp);
+          profileResponse.campaign = buildProfileResponse(profileResp);
           gateStats = profileResp;
         }
 
@@ -168,7 +168,7 @@ export default function gameRoutes(app) {
     async (req, res) => {
       const walletAddress = req.user.walletAddress;
       try {
-        
+
         await gateWallets.updateOne(
           { walletAddress },
           { $set: { hasAwarded: true } }
@@ -219,7 +219,7 @@ export default function gameRoutes(app) {
         const cachedGateUser = walletAddress ? await getGateUserRedis(walletAddress) : null;
 
         console.log("cachedGateUser:", cachedGateUser);
-        
+
         if (cachedGateUser) {
           const maxStreak = cachedGateUser?.streak || 0;
           let isEligible = false;
@@ -277,7 +277,7 @@ export default function gameRoutes(app) {
         }
 
         console.log("my cached Gate User; ", cachedGateUser);
-        if( cachedGateUser.streak == 5 && cachedGateUser.currentStreak == 5 ) {
+        if (cachedGateUser.streak == 5 && cachedGateUser.currentStreak == 5) {
           return res.status(200).json({ success: true, isGalaxyUserEligible: true });
         }
 
