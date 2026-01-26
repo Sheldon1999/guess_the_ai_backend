@@ -22,13 +22,14 @@ export default function leaderboardRoutes(app) {
   app.get("/api/leaderboard/gateUsers", async (req, res) => {
     res.set('Cache-Control', 'public, s-maxage=120, max-age=120');
     const limit = Math.min(Number(req.query.limit || 50), 200);
-    gateLeaderboardLog("request", { limit });
+    const type = req.query.type || "all";
+    gateLeaderboardLog("request", { limit, type });
     const flushResult = await flushGateUsers().catch((err) => {
       console.error("leaderboard flush error:", err);
       return null;
     });
     gateLeaderboardLog("flushResult", { flushResult });
-    const data = await getGateWalletLeaderboard(limit);
+    const data = await getGateWalletLeaderboard(limit, type);
     gateLeaderboardLog("leaderboardData", { limit, count: data.length });
     res.json(data);
   });

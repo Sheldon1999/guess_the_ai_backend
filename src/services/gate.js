@@ -74,7 +74,7 @@ export async function flushGateUsers() {
 
 export async function createGateUserRedis(wallet, username, walletType = "normal") {
     const isGateUserExisted = await getGateUserRedis(wallet);
-    if(isGateUserExisted){
+    if (isGateUserExisted) {
         gateDebugLog("createGateUserRedis skipped, already cached", { wallet });
         return;
     }
@@ -95,7 +95,6 @@ export async function createGateUserRedis(wallet, username, walletType = "normal
 
 export async function getGateUserRedis(wallet) {
     const userKey = docGateUserKey(wallet);
-    console.log("user Key is ",userKey);
     const cached = await redis.get(userKey);
     gateDebugLog("getGateUserRedis", { wallet, hit: Boolean(cached) });
     return JSON.parse(cached);
@@ -106,10 +105,10 @@ export async function updateGateUserScoreRedis(wallet, hasCorrectAnswer) {
     let correctAnswers = payload.correctAnswers;
     let currentStreak = payload.currentStreak;
     let streak = payload.streak;
-    if(hasCorrectAnswer) {
+    if (hasCorrectAnswer) {
         correctAnswers = correctAnswers + 1;
         currentStreak = currentStreak + 1;
-        if(currentStreak > streak){
+        if (currentStreak > streak) {
             streak = currentStreak;
         }
     } else {
@@ -137,13 +136,17 @@ export async function updateGateUsernameRedis(wallet, newUsername) {
         correctAnswers: payload.correctAnswers,
         currentStreak: payload.currentStreak,
         streak: payload.streak,
+        type: payload.type || "normal",
+        walletAddress: payload.walletAddress || wallet,
+        rank: payload.rank,
+        dungeonTitle: payload.dungeonTitle,
         username: newUsername
     }
     const userKey = docGateUserKey(wallet);
     await redis.set(userKey, JSON.stringify(updatedPayload));
 }
 
-export async function getGateWalletLeaderboard(limit) {
+export async function getGateWalletLeaderboard(limit, type = "all") {
     const safeLimit = Math.max(Number(limit) || 0, 0);
     if (!safeLimit) return [];
 
@@ -175,13 +178,18 @@ export async function getGateWalletLeaderboard(limit) {
                 : key;
             if (!walletAddress) continue;
 
+            // Filter by type - only include entries matching the provided type
+            // If type is "all", no filtering is done
+            const entryType = payload.type;
+            if (type !== "all" && entryType !== type) continue;
+
             entries.push({
                 walletAddress,
                 username: String(payload.username),
                 correctAnswers: Number(payload.correctAnswers) || 0,
                 currentStreak: Number(payload.currentStreak) || 0,
                 streak: Number(payload.streak) || 0,
-                type: String(payload.type || "normal"),
+                type: String(payload.type),
                 rank: payload.rank,
                 dungeonTitle: payload.dungeonTitle
             });
@@ -202,6 +210,5 @@ export async function getGateWalletLeaderboard(limit) {
         correctAnswers: entry.correctAnswers,
         currentStreak: entry.currentStreak,
         streak: entry.streak,
-        type: entry.type
     }));
 }

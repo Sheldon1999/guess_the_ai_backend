@@ -4,7 +4,7 @@ import { generateAuthToken, verifyBrowserToken } from "../middleware/jwt.js";
 import { recordUserRegistration } from "../lib/onchain/index.js";
 import { readUserFromRedis, writeUserToRedis } from "../lib/docCache.js";
 import { createEmbeddedWalletForUser, getWalletById, isPrivyConfigured } from "../lib/privy.js";
-import { createGateUserRedis } from "./gate.js";
+import { createGateUserRedis, getGateUserRedis } from "./gate.js";
 
 const isPlainObject = (value) => Boolean(value) && typeof value === "object" && !Array.isArray(value);
 
@@ -335,9 +335,9 @@ const buildIncomingMeta = (request, walletFromJwt) => {
 const resolveWalletAddresses = (request, walletFromJwt, incomingMeta) => {
   const externalWalletCandidate = normalizeWallet(
     request.walletAddress ||
-      walletFromJwt ||
-      incomingMeta.walletAddress ||
-      incomingMeta.address
+    walletFromJwt ||
+    incomingMeta.walletAddress ||
+    incomingMeta.address
   );
   const externalWalletAddress =
     externalWalletCandidate && isAddress(externalWalletCandidate) ? externalWalletCandidate : "";
@@ -419,11 +419,11 @@ const findUserDoc = async (context) => {
 const resolveWalletCandidate = (userDoc, context) =>
   normalizeWallet(
     userDoc.walletAddress ||
-      context.externalWalletAddress ||
-      context.embeddedWalletAddress ||
-      userDoc?.privyMetaData?.embeddedWalletAddress ||
-      userDoc?.privyMetaData?.walletAddress ||
-      userDoc?.privyMetaData?.address
+    context.externalWalletAddress ||
+    context.embeddedWalletAddress ||
+    userDoc?.privyMetaData?.embeddedWalletAddress ||
+    userDoc?.privyMetaData?.walletAddress ||
+    userDoc?.privyMetaData?.address
   );
 
 const resolveWalletForExistingUser = async (context, userDoc) => {
@@ -525,7 +525,11 @@ const ensureGateWalletUser = async (context, walletAddress) => {
   const isGateUserExisted = await gateWallets.findOne({ walletAddress });
   if (!isGateUserExisted) {
     gateAuthLog("ensureGateWalletUser inserting gateWallets doc", { walletAddress });
-    await gateWallets.insertOne({ walletAddress, hasAwarded: false });
+    await gateWallets.insertOne({ walletAddress, hasAwarded: false, privyMetaData: context.incomingMeta });
+  }
+  const cachedGateUser = await getGateUserRedis(walletAddress);
+  if (!cachedGateUser) {
+    await createGateUserRedis(walletAddress, username, walletType);
   }
   gateAuthLog("ensureGateWalletUser complete", {
     walletAddress,
@@ -724,7 +728,10 @@ export async function loginV2(payload, options = {}) {
     await gateWallets.insertOne({ hasAwarded: false, privyMetaToStore });
   }
   gateAuthLog("login creating gate redis entry", { wallet: walletToCreate, username, walletType });
-  await createGateUserRedis(walletToCreate, username, walletType);
+  const cachedGateUser = await getGateUserRedis(walletToCreate);
+  if (!cachedGateUser) {
+    await createGateUserRedis(walletToCreate, username, walletType);
+  }
 
   return {
     token,
