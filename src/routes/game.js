@@ -186,8 +186,9 @@ export default function gameRoutes(app) {
     "/api/galaxy/check-galaxy-reward-eligibility",
     async (req, res) => {
       try {
-        const address = String(req.query?.address || "").trim();
-        if (!address) {
+        const addressParam = String(req.query?.address || "").trim();
+        const normalizedAddress = addressParam.toLowerCase();
+        if (!normalizedAddress) {
           return res.status(200).json({
             message: "address required",
             code: 200,
@@ -199,25 +200,23 @@ export default function gameRoutes(app) {
           {
             $expr: {
               $in: [
-                address,
+                normalizedAddress,
                 {
                   $map: {
                     input: { $objectToArray: { $ifNull: ["$privyMetaData", {}] } },
                     as: "item",
-                    in: "$$item.v",
+                    in: { $toLower: "$$item.v" },
                   },
                 },
               ],
             },
           },
-          { projection: { _id: 1 } }
+          { projection: { _id: 1, walletAddress: 1 } }
         );
 
-        const walletAddress = matchedUser ? matchedUser.walletAddress : null;
-        console.log("chck walletAdress to get cached Gated Users", walletAddress)
-        const cachedGateUser = walletAddress
-          ? await getGateUserRedis(walletAddress)
-          : null;
+        const walletAddress = matchedUser?.walletAddress || normalizedAddress;
+        console.log("check walletAddress to get cached Gated Users", walletAddress);
+        const cachedGateUser = walletAddress ? await getGateUserRedis(walletAddress) : null;
 
         console.log("cachedGateUser:", cachedGateUser);
         
