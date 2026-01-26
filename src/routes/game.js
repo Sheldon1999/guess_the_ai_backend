@@ -263,16 +263,20 @@ export default function gameRoutes(app) {
           { walletAddress },
           { projection: { _id: 1 } }
         );
+        console.log("existingUser:", existingUser);
 
         if (!existingUser) {
           return res.status(200).json({ success: true, isGalaxyUserEligible: false });
         }
 
+        console.log("check walletAddress to get cached Gated Users", walletAddress);
         const cachedGateUser = await getGateUserRedis(walletAddress);
-        if (cachedGateUser) {
+        console.log("cachedGateUser:", cachedGateUser);
+        if (!cachedGateUser) {
           return res.status(200).json({ success: true, isGalaxyUserEligible: false });
         }
 
+        console.log("my cached Gate User; ", cachedGateUser);
         if( cachedGateUser.streak == 5 && cachedGateUser.currentStreak == 5 ) {
           return res.status(200).json({ success: true, isGalaxyUserEligible: true });
         }
