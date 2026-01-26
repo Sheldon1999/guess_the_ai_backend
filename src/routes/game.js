@@ -214,10 +214,13 @@ export default function gameRoutes(app) {
         );
 
         const walletAddress = matchedUser ? matchedUser.walletAddress : null;
+        console.log("chck walletAdress to get cached Gated Users", walletAddress)
         const cachedGateUser = walletAddress
           ? await getGateUserRedis(walletAddress)
           : null;
 
+        console.log("cachedGateUser:", cachedGateUser);
+        
         if (cachedGateUser) {
           const maxStreak = cachedGateUser?.streak || 0;
           let isEligible = false;
