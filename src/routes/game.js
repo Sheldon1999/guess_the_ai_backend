@@ -110,6 +110,7 @@ export default function gameRoutes(app) {
         });
 
         let profileResponse = buildProfileResponse(profileResp);
+        let gateStats = null;
 
         const cachedGateUser = await getGateUserRedis(walletAddress);
         console.log("cachedGateUser:", cachedGateUser);
@@ -117,6 +118,7 @@ export default function gameRoutes(app) {
           await updateGateUserScoreRedis(walletAddress, correctResp);
           profileResp = await getGateUserRedis(walletAddress);
           profileResponse = buildProfileResponse(profileResp);
+          gateStats = profileResp;
         }
 
 
