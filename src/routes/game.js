@@ -168,6 +168,7 @@ export default function gameRoutes(app) {
     async (req, res) => {
       const walletAddress = req.user.walletAddress;
       try {
+        
         await gateWallets.updateOne(
           { walletAddress },
           { $set: { hasAwarded: true } }
@@ -214,10 +215,10 @@ export default function gameRoutes(app) {
 
         if (matchedUser) {
 
-          const currentStreak = matchedUser?.currentStreak;
+          const maxStreak = matchedUser?.streak || 0;
           
           let isEligible = false;
-          if (currentStreak == 5) {
+          if (maxStreak == 5) {
             isEligible = true;
           }
           return res.status(200).json({
@@ -262,7 +263,7 @@ export default function gameRoutes(app) {
           return res.status(200).json({ success: true, isGalaxyUserEligible: false });
         }
 
-        if( existingUser.currentStreak >= 5) {
+        if( existingUser.streak == 5 & existingUser.currentStreak == 5 ) {
           return res.status(200).json({ success: true, isGalaxyUserEligible: true });
         }
 
