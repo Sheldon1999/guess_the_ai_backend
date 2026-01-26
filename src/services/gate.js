@@ -1,11 +1,18 @@
 import { gateWallets } from "../lib/mongo.js";
-import { docGateUserKey } from "../lib/redisKeys";
+import { docGateUserKey } from "../lib/redisKeys.js";
 import redis from "../lib/redis.js";
+
+const gateDebugLog = (...args) => {
+    if (process.env.GATE_DEBUG === "1") {
+        console.log("[gate-gateCache]", ...args);
+    }
+};
 
 export async function flushGateUsers() {
     const keyPrefix = docGateUserKey("");
     const matchPattern = `${keyPrefix}*`;
     const operations = [];
+    gateDebugLog("flushGateUsers start", { keyPrefix, matchPattern });
 
     let cursor = "0";
     do {
@@ -35,7 +42,8 @@ export async function flushGateUsers() {
             const updatePayload = {
                 correctAnswers: Number(payload.correctAnswers) || 0,
                 currentStreak: Number(payload.currentStreak) || 0,
-                streak: Number(payload.streak) || 0
+                streak: Number(payload.streak) || 0,
+                type: payload.type || "normal"
             };
             if (typeof payload.username === "string" && payload.username.trim()) {
                 updatePayload.username = payload.username;
@@ -50,19 +58,30 @@ export async function flushGateUsers() {
         }
     } while (cursor !== "0");
 
-    if (!operations.length) return { flushed: 0 };
+    if (!operations.length) {
+        gateDebugLog("flushGateUsers no operations");
+        return { flushed: 0 };
+    }
 
     await gateWallets.bulkWrite(operations, { ordered: false });
+    gateDebugLog("flushGateUsers bulkWrite", { operations: operations.length });
     return { flushed: operations.length };
 }
 
-export async function createGateUserRedis(wallet, username) {
+export async function createGateUserRedis(wallet, username, walletType = "normal") {
+    const isGateUserExisted = await getGateUserRedis(wallet);
+    if(isGateUserExisted){
+        gateDebugLog("createGateUserRedis skipped, already cached", { wallet });
+        return;
+    }
     const payload = {
         correctAnswers: 0,
         currentStreak: 0,
         streak: 0,
-        username: username
+        username: username,
+        type: walletType
     };
+    gateDebugLog("createGateUserRedis", { wallet, username, walletType });
     const userKey = docGateUserKey(wallet);
     await redis.set(userKey, JSON.stringify(payload));
 }
@@ -70,6 +89,7 @@ export async function createGateUserRedis(wallet, username) {
 export async function getGateUserRedis(wallet) {
     const userKey = docGateUserKey(wallet);
     const cached = await redis.get(userKey);
+    gateDebugLog("getGateUserRedis", { wallet, hit: Boolean(cached) });
     return JSON.parse(cached);
 }
 
@@ -92,9 +112,11 @@ export async function updateGateUserScoreRedis(wallet, hasCorrectAnswer) {
         correctAnswers: correctAnswers,
         currentStreak: currentStreak,
         streak: streak,
-        username: payload.username
+        username: payload.username,
+        type: payload.type || "normal"
     }
     const userKey = docGateUserKey(wallet);
+    gateDebugLog("updateGateUserScoreRedis", { wallet, hasCorrectAnswer, updatedPayload });
     await redis.set(userKey, JSON.stringify(updatedPayload));
 }
 
@@ -147,11 +169,13 @@ export async function getGateWalletLeaderboard(limit) {
                 username: String(payload.username),
                 correctAnswers: Number(payload.correctAnswers) || 0,
                 currentStreak: Number(payload.currentStreak) || 0,
-                streak: Number(payload.streak) || 0
+                streak: Number(payload.streak) || 0,
+                type: String(payload.type || "normal")
             });
         }
     } while (cursor !== "0");
 
+    gateDebugLog("getGateWalletLeaderboard candidates", { limit: safeLimit, total: entries.length });
     entries.sort((a, b) => {
         if (b.correctAnswers !== a.correctAnswers) return b.correctAnswers - a.correctAnswers;
         if (b.streak !== a.streak) return b.streak - a.streak;
@@ -164,6 +188,7 @@ export async function getGateWalletLeaderboard(limit) {
         walletAddress: entry.walletAddress,
         correctAnswers: entry.correctAnswers,
         currentStreak: entry.currentStreak,
-        streak: entry.streak
+        streak: entry.streak,
+        type: entry.type
     }));
 }
