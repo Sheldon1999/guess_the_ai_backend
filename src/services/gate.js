@@ -195,8 +195,8 @@ export async function getGateWalletLeaderboard(limit) {
         return b.currentStreak - a.currentStreak;
     });
 
-    return entries.slice(0, safeLimit).map((entry, index) => ({
-        rank: index + 1,
+    return entries.slice(0, safeLimit).map((entry) => ({
+        rank: entry.rank,
         username: entry.username,
         walletAddress: entry.walletAddress,
         correctAnswers: entry.correctAnswers,
