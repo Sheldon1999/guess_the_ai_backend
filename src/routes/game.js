@@ -263,7 +263,12 @@ export default function gameRoutes(app) {
           return res.status(200).json({ success: true, isGalaxyUserEligible: false });
         }
 
-        if( existingUser.streak == 5 & existingUser.currentStreak == 5 ) {
+        const cachedGateUser = await getGateUserRedis(walletAddress);
+        if (cachedGateUser) {
+          return res.status(200).json({ success: true, isGalaxyUserEligible: false });
+        }
+
+        if( cachedGateUser.streak == 5 && cachedGateUser.currentStreak == 5 ) {
           return res.status(200).json({ success: true, isGalaxyUserEligible: true });
         }
 
