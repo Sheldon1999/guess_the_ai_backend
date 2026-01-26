@@ -100,20 +100,23 @@ export default function gameRoutes(app) {
           : (truthResp ? guess === truthResp : null);
 
         // console.log(profileResp);
-        let profileResponse = {
-          username: profileResp?.username,
-          correctAnswers: profileResp?.correctAnswers,
-          currentStreak: profileResp?.currentStreak,
-          streak: profileResp?.streak,
-          rank: profileResp?.rank,
-          dungeonTitle: profileResp?.dungeonTitle,
-        };
+        const buildProfileResponse = (profile) => ({
+          username: profile?.username,
+          correctAnswers: profile?.correctAnswers,
+          currentStreak: profile?.currentStreak,
+          streak: profile?.streak,
+          rank: profile?.rank,
+          dungeonTitle: profile?.dungeonTitle,
+        });
+
+        let profileResponse = buildProfileResponse(profileResp);
 
         const cachedGateUser = await getGateUserRedis(walletAddress);
         console.log("cachedGateUser:", cachedGateUser);
-        if(cachedGateUser){
+        if (cachedGateUser) {
           await updateGateUserScoreRedis(walletAddress, correctResp);
           profileResp = await getGateUserRedis(walletAddress);
+          profileResponse = buildProfileResponse(profileResp);
         }
 
 
@@ -124,6 +127,7 @@ export default function gameRoutes(app) {
           imageId: imageIdResp,
           hash,
           profile: profileResponse,
+          gateStats,
         });
       } catch (err) {
         console.error("[API] url: /api/game/ans; error: ", err);
