@@ -95,6 +95,7 @@ export async function createGateUserRedis(wallet, username, walletType = "normal
 
 export async function getGateUserRedis(wallet) {
     const userKey = docGateUserKey(wallet);
+    console.log("user Key is ",userKey);
     const cached = await redis.get(userKey);
     gateDebugLog("getGateUserRedis", { wallet, hit: Boolean(cached) });
     return JSON.parse(cached);
