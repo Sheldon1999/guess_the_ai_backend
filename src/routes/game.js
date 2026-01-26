@@ -213,12 +213,15 @@ export default function gameRoutes(app) {
           { projection: { _id: 1 } }
         );
 
-        if (matchedUser) {
+        const walletAddress = matchedUser ? matchedUser.walletAddress : null;
+        const cachedGateUser = walletAddress
+          ? await getGateUserRedis(walletAddress)
+          : null;
 
-          const maxStreak = matchedUser?.streak || 0;
-          
+        if (cachedGateUser) {
+          const maxStreak = cachedGateUser?.streak || 0;
           let isEligible = false;
-          if (maxStreak == 5) {
+          if (maxStreak >= 5) {
             isEligible = true;
           }
           return res.status(200).json({
