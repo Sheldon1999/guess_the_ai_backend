@@ -110,10 +110,12 @@ export default function gameRoutes(app) {
         };
 
         const cachedGateUser = await getGateUserRedis(walletAddress);
+        console.log("cachedGateUser:", cachedGateUser);
         if(cachedGateUser){
           await updateGateUserScoreRedis(walletAddress, correctResp);
           profileResp = await getGateUserRedis(walletAddress);
         }
+        
 
         return res.json({
           correct: correctResp,

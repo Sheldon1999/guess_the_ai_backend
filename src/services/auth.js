@@ -24,6 +24,19 @@ const maskValue = (value) => {
   return `${trimmed.slice(0, 4)}...${trimmed.slice(-4)}`;
 };
 
+const gateAuthLog = (stage, data) => {
+  if (process.env.GATE_DEBUG === "1") {
+    console.log(`[gate-auth] ${stage}`, data);
+  }
+};
+
+const resolveWalletType = (context) => {
+  if (!context) return "normal";
+  if (context.incomingMeta?.type) return context.incomingMeta.type;
+  if (context.request?.sessionWallet === "VERIFIED") return "gate_wallet";
+  return "normal";
+};
+
 const summarizeMeta = (meta) => {
   if (!isPlainObject(meta)) return { keys: [] };
   return {
@@ -503,12 +516,23 @@ const writeCacheIfMissing = async (walletAddress, userDoc, username, now) => {
 const ensureGateWalletUser = async (context, walletAddress) => {
   const isGateUser =
     context.request?.sessionWallet === "VERIFIED" || context.incomingMeta?.type === "gate_wallet";
-  if (!isGateUser) return false;
+  gateAuthLog("ensureGateWalletUser start", {
+    walletAddress,
+    sessionWallet: context.request?.sessionWallet,
+    incomingType: context.incomingMeta?.type,
+    isGateUser
+  });
   const isGateUserExisted = await gateWallets.findOne({ walletAddress });
   if (!isGateUserExisted) {
+    gateAuthLog("ensureGateWalletUser inserting gateWallets doc", { walletAddress });
     await gateWallets.insertOne({ walletAddress, hasAwarded: false });
   }
-  return true;
+  gateAuthLog("ensureGateWalletUser complete", {
+    walletAddress,
+    gateDocExists: Boolean(isGateUserExisted),
+    isGateUser
+  });
+  return isGateUser || Boolean(isGateUserExisted);
 };
 
 export async function loginV2(payload, options = {}) {
@@ -573,7 +597,10 @@ export async function loginV2(payload, options = {}) {
 
     await writeCacheIfMissing(resolvedWallet, updatedUserDoc, username, now);
 
+    const walletType = resolveWalletType(context);
     const isGateUser = await ensureGateWalletUser(context, resolvedWallet);
+    gateAuthLog("existing user login creating gate redis entry", { wallet: resolvedWallet, username, walletType });
+    await createGateUserRedis(resolvedWallet, username, walletType);
 
     const responseUser = buildUserPayload(
       { ...updatedUserDoc, walletAddress: resolvedWallet, username },
@@ -610,6 +637,7 @@ export async function loginV2(payload, options = {}) {
 
   const username = `Player_${Date.now()}`;
   const privyMetaToStore = Object.keys(context.incomingMeta).length ? context.incomingMeta : {};
+  const walletType = resolveWalletType(context);
 
   logV2("info", "create_user", {
     walletAddress: maskValue(walletToCreate),
@@ -667,6 +695,12 @@ export async function loginV2(payload, options = {}) {
   });
 
   const isGateUser = await ensureGateWalletUser(context, walletToCreate);
+  gateAuthLog("login gate status", {
+    wallet: walletToCreate,
+    isGateUser,
+    hasGateMeta: Boolean(context.incomingMeta?.type === "gate_wallet"),
+    sessionWallet: context.request?.sessionWallet,
+  });
 
   const responseUser = buildUserPayload(
     { ...(createdDoc || setOnInsert), walletAddress: walletToCreate, username },
@@ -680,11 +714,17 @@ export async function loginV2(payload, options = {}) {
     nameUpdated: false
   });
 
-  const isGateUserExisted = await gateWallets.findOne({ walletToCreate });
-  if (!isGateUserExisted) {
+  // const isGateUserExisted = await gateWallets.findOne({ walletAddress: walletToCreate });
+
+  // const isGateUserExisted = await gateWallets.findOne({ walletAddress: walletToCreate });
+  // for galaxy rewards all type of wallets are eligible
+  const isGalaxyUserEligible = await gateWallets.findOne({ walletAddress: walletToCreate });
+  if (!isGalaxyUserEligible) {
+    gateAuthLog("login inserting gateWallets doc", { wallet: walletToCreate });
     await gateWallets.insertOne({ hasAwarded: false, privyMetaToStore });
-    await createGateUserRedis(walletToCreate, username);
   }
+  gateAuthLog("login creating gate redis entry", { wallet: walletToCreate, username, walletType });
+  await createGateUserRedis(walletToCreate, username, walletType);
 
   return {
     token,
