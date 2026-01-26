@@ -1,6 +1,7 @@
 import { gateWallets } from "../lib/mongo.js";
 import { docGateUserKey } from "../lib/redisKeys.js";
 import redis from "../lib/redis.js";
+import { rankFromCorrect, titleFromStreak } from "../lib/rank.js";
 
 const gateDebugLog = (...args) => {
     if (process.env.GATE_DEBUG === "1") {
@@ -43,7 +44,10 @@ export async function flushGateUsers() {
                 correctAnswers: Number(payload.correctAnswers) || 0,
                 currentStreak: Number(payload.currentStreak) || 0,
                 streak: Number(payload.streak) || 0,
-                type: payload.type || "normal"
+                rank: payload.rank || rankFromCorrect(Number(payload.correctAnswers) || 0),
+                dungeonTitle: payload.dungeonTitle || titleFromStreak(Number(payload.streak) || 0),
+                type: payload.type || "normal",
+                walletAddress
             };
             if (typeof payload.username === "string" && payload.username.trim()) {
                 updatePayload.username = payload.username;
@@ -81,6 +85,9 @@ export async function createGateUserRedis(wallet, username, walletType = "normal
         username: username,
         type: walletType
     };
+    payload.walletAddress = wallet;
+    payload.rank = rankFromCorrect(0);
+    payload.dungeonTitle = titleFromStreak(0);
     gateDebugLog("createGateUserRedis", { wallet, username, walletType });
     const userKey = docGateUserKey(wallet);
     await redis.set(userKey, JSON.stringify(payload));
@@ -113,7 +120,10 @@ export async function updateGateUserScoreRedis(wallet, hasCorrectAnswer) {
         currentStreak: currentStreak,
         streak: streak,
         username: payload.username,
-        type: payload.type || "normal"
+        type: payload.type || "normal",
+        walletAddress: payload.walletAddress || wallet,
+        rank: rankFromCorrect(correctAnswers),
+        dungeonTitle: titleFromStreak(streak)
     }
     const userKey = docGateUserKey(wallet);
     gateDebugLog("updateGateUserScoreRedis", { wallet, hasCorrectAnswer, updatedPayload });
@@ -170,7 +180,9 @@ export async function getGateWalletLeaderboard(limit) {
                 correctAnswers: Number(payload.correctAnswers) || 0,
                 currentStreak: Number(payload.currentStreak) || 0,
                 streak: Number(payload.streak) || 0,
-                type: String(payload.type || "normal")
+                type: String(payload.type || "normal"),
+                rank: payload.rank,
+                dungeonTitle: payload.dungeonTitle
             });
         }
     } while (cursor !== "0");
