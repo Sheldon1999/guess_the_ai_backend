@@ -162,7 +162,7 @@ export default function gameRoutes(app) {
     }
   );
 
-  app.get('/api/game/check-gate-user-eligiblity', async (req, res) => {
+  app.get('/api/game/check-gate-user-eligibility', async (req, res) => {
 
     try {
       const walletAddress = String(req.query?.address || "").trim();
