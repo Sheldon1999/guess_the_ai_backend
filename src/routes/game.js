@@ -164,23 +164,28 @@ export default function gameRoutes(app) {
 
   app.get('/api/game/check-gate-user-eligiblity', async (req, res) => {
 
-    const walletAddress = String(req.query?.address || "").trim();
-    if (!walletAddress) {
-      return res.status(400).json({ error: "address required", isEligible: false });
-    }
+    try {
+      const walletAddress = String(req.query?.address || "").trim();
+      if (!walletAddress) {
+        return res.status(404).json({ error: "address required", isEligible: false });
+      }
 
-    const gateUser = await getGateUserRedis(walletAddress);
-    console.log("gateUser:", gateUser);
-    if(!gateUser) {
-      return res.status(200).json({ message:"user not found", isEligible: false });
-    }
+      const gateUser = await getGateUserRedis(walletAddress);
+      console.log("gateUser:", gateUser);
+      if(!gateUser) {
+        return res.status(200).json({ message:"user not found", isEligible: false });
+      }
 
-    const maxStreak = gateUser?.streak || 0;
-    let isEligible = false;
-    if (maxStreak >= 5 && gateUser?.currentStreak >=5 ) {
-      isEligible = true;
+      const maxStreak = gateUser?.streak || 0;
+      let isEligible = false;
+      if (maxStreak >= 5 && gateUser?.currentStreak >=5 ) {
+        isEligible = true;
+      }
+      return res.status(200).json({ message: "successful", isEligible: isEligible });
+    } catch (err) {
+      console.error("[API] url: /api/game/check-gate-user-eligiblity; error: ", err);
+      return res.status(500).json({ error: "internal server error", isEligible: false });  
     }
-    return res.status(200).json({ message: "successful", isEligible: isEligible });
   })
 
   app.put(
