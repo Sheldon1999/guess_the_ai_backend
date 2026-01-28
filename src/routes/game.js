@@ -162,6 +162,40 @@ export default function gameRoutes(app) {
     }
   );
 
+  const logRoute = (path) => {
+    console.log(`[gameRoutes] registering ${path}`);
+    app.get(path, gateUserEligibilityHandler);
+  };
+
+  const gateUserEligibilityHandler = async (req, res) => {
+    try {
+      const walletAddress = String(req.query?.address || "").trim();
+      console.log("[gameRoutes] checkGateEligibility called", { walletAddress, query: req.query });
+      if (!walletAddress) {
+        return res.status(400).json({ error: "address required", isEligible: false });
+      }
+
+      const gateUser = await getGateUserRedis(walletAddress);
+      console.log("[gameRoutes] cached gate user", { gateUser });
+      if (!gateUser) {
+        return res.status(200).json({ message: "user not found", isEligible: false });
+      }
+
+      const maxStreak = gateUser?.streak || 0;
+      let isEligible = false;
+      if (maxStreak >= 5 && gateUser?.currentStreak >= 5) {
+        isEligible = true;
+      }
+      return res.status(200).json({ message: "successful", isEligible });
+    } catch (err) {
+      console.error("[API] url: /api/game/check-gate-user-eligiblity; error: ", err);
+      return res.status(500).json({ error: "internal server error", isEligible: false });
+    }
+  };
+
+  logRoute('/api/game/check-gate-user-eligibility');
+  logRoute('/api/game/check-gate-user-eligiblity');
+
   app.put(
     "/api/game/awardGateUser",
     protect,
