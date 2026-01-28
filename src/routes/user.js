@@ -241,9 +241,9 @@ export default function userRoutes(app) {
         }
 
         const cachedGateUser = await getGateUserRedis(walletAddress);
-        if(cachedGateUser){
+        if (cachedGateUser) {
           await updateGateUsernameRedis(walletAddress, username);
-          responseUser = await getGateUserRedis(walletAddress);
+          responseUser.campaign = await getGateUserRedis(walletAddress);
         }
 
         return res.json({
@@ -279,8 +279,8 @@ export default function userRoutes(app) {
         }
 
         const cachedGateUser = await getGateUserRedis(walletAddress);
-        if(cachedGateUser){
-          profile = await getGateUserRedis(walletAddress);
+        if (cachedGateUser) {
+          profile.campaign = cachedGateUser;
         }
 
         return res.json({
