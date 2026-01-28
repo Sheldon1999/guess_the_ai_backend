@@ -513,7 +513,7 @@ const writeCacheIfMissing = async (walletAddress, userDoc, username, now) => {
   });
 };
 
-const ensureGateWalletUser = async (context, walletAddress) => {
+const ensureGateWalletUser = async (context, walletAddress, username, walletType) => {
   const isGateUser =
     context.request?.sessionWallet === "VERIFIED" || context.incomingMeta?.type === "gate_wallet";
   gateAuthLog("ensureGateWalletUser start", {
@@ -528,7 +528,7 @@ const ensureGateWalletUser = async (context, walletAddress) => {
     await gateWallets.insertOne({ walletAddress, hasAwarded: false, privyMetaData: context.incomingMeta });
   }
   const cachedGateUser = await getGateUserRedis(walletAddress);
-  if (!cachedGateUser) {
+  if (!cachedGateUser && username && walletType) {
     await createGateUserRedis(walletAddress, username, walletType);
   }
   gateAuthLog("ensureGateWalletUser complete", {
@@ -602,7 +602,7 @@ export async function loginV2(payload, options = {}) {
     await writeCacheIfMissing(resolvedWallet, updatedUserDoc, username, now);
 
     const walletType = resolveWalletType(context);
-    const isGateUser = await ensureGateWalletUser(context, resolvedWallet);
+    const isGateUser = await ensureGateWalletUser(context, resolvedWallet, username, walletType);
     gateAuthLog("existing user login creating gate redis entry", { wallet: resolvedWallet, username, walletType });
     await createGateUserRedis(resolvedWallet, username, walletType);
 
@@ -698,7 +698,7 @@ export async function loginV2(payload, options = {}) {
     lastFlushedAt: now,
   });
 
-  const isGateUser = await ensureGateWalletUser(context, walletToCreate);
+  const isGateUser = await ensureGateWalletUser(context, walletToCreate, username, walletType);
   gateAuthLog("login gate status", {
     wallet: walletToCreate,
     isGateUser,
