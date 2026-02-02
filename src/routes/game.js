@@ -184,7 +184,10 @@ export default function gameRoutes(app) {
         message: "successful",
         result,
         isEligible: result,
-        data: { maxStreak, currentStreak },
+        data: {
+          maxStreak,
+          currentStreak
+        }
       });
     } catch (err) {
       console.error("[API] url: /api/game/check-gate-user-eligibility; error: ", err);
