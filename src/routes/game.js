@@ -6,12 +6,25 @@ import { handleBackupAnswer, handleMongoAnswer, handleRedisAnswer } from "../ser
 import { pick10RandomHashes, pickBackupImage } from "../service/game.js";
 import { gateWallets, users } from "../lib/mongo.js";
 import { getGateUserRedis, updateGateUserScoreRedis } from "../services/gate.js";
+import { hexToBigInt, keccak256, stringToBytes } from "viem";
+import { loadSession } from "./session.js";
+import { recordAnswerSubmission, recordSeasonScore } from "../lib/onchain/index.js";
 
 function normalizeGuess(g) {
   const v = String(g || "")
     .trim()
     .toLowerCase();
   return v === "ai" || v === "human" ? v : null;
+}
+
+function toQuestionId(value) {
+  if (value === null || value === undefined) return null;
+  try {
+    const hash = keccak256(stringToBytes(String(value)));
+    return hexToBigInt(hash);
+  } catch {
+    return null;
+  }
 }
 
 export default function gameRoutes(app) {
@@ -121,6 +134,41 @@ export default function gameRoutes(app) {
           gateStats = profileResp;
         }
 
+
+        const session = await loadSession(walletAddress).catch(() => null);
+        const sessionKey = session?.sessionKey;
+        const questionId = toQuestionId(imageIdResp ?? hash);
+
+        recordAnswerSubmission({
+          walletAddress,
+          sessionKey,
+          questionId,
+          answer: guess,
+          isCorrect: correctResp
+        })
+          .then((result) => {
+            if (result?.error) {
+              console.error("onchain submission error:", result.error);
+            }
+          })
+          .catch((error) =>
+            console.error("onchain submission exception:", error)
+          );
+
+        if (correctResp && profileResp?.correctAnswers != null) {
+          recordSeasonScore({
+            walletAddress,
+            totalCorrect: profileResp.correctAnswers
+          })
+            .then((result) => {
+              if (result?.error) {
+                console.error("onchain leaderboard error:", result.error);
+              }
+            })
+            .catch((error) =>
+              console.error("onchain leaderboard exception:", error)
+            );
+        }
 
         return res.json({
           correct: correctResp,

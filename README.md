@@ -34,6 +34,9 @@ The backend can emit transactions whenever players register, start a session, or
 | `ONCHAIN_RPC_URL` | HTTPS RPC endpoint for the target EVM network (e.g. 0G Galileo) |
 | `ONCHAIN_PRIVATE_KEY` | Admin signer that pays gas and submits transactions (no `0x` needed) |
 | `ONCHAIN_CONTRACT_ADDRESS` | Deployed `GuessTheAIEvents` contract address |
+| `ONCHAIN_ANSWER_CONTRACT_ADDRESS` | Deployed `AnswerSubmissions` contract address |
+| `ONCHAIN_LEADERBOARD_CONTRACT_ADDRESS` | Deployed `Leaderboard` contract address |
+| `ONCHAIN_SEASON_ID` | Season id for leaderboard writes (defaults to `1`) |
 | `ONCHAIN_CHAIN_ID` | Chain id (defaults to `16601`) |
 | `ONCHAIN_CHAIN_NAME` | Friendly chain name for logs (defaults to `0G Galileo Testnet`) |
 | `ONCHAIN_CHAIN_CURRENCY` | Native token symbol (defaults to `OG`) |
