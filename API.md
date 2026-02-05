@@ -1,10 +1,5 @@
 # Guess The AI Backend API Documentation
 
-## 🌐 Base URL
-```
-
-```
-
 All endpoints are prefixed with `/api`
 
 ---
