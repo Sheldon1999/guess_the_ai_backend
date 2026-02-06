@@ -8,12 +8,12 @@ import morgan from "morgan";
 import "./lib/redis.js";
 import "./lib/mongo.js";
 
-import health from "./routes/health.js";
+import healthRoutes from "./routes/health.js";
 import imageRoutes from "./routes/image.js";
-import userRoutes from "./routes/user.js";
-import gameRoutes from "./routes/game.js";
-import leaderboardRoutes from "./routes/leaderboard.js";
-import sessionRoutes from "./routes/session.js";
+import userRoutes from "./routes/userRoutes.js";
+import gameRoutes from "./routes/gameRoutes.js";
+import leaderboardRoutes from "./routes/leaderboardRoutes.js";
+import sessionRoutes from "./routes/sessionRoutes.js";
 
 import { warmOnBoot, startBackgroundTopup } from "./lib/warmup.js";
 import { startRedisFlushWorker } from "./lib/docCache.js";
@@ -23,7 +23,9 @@ const app = express();
 app.use(express.json({ limit: "1mb" }));
 
 const defaultAllowedOrigins = [
-  "https://guesstheai.xyz"
+  "https://guesstheai.xyz",
+  "http://localhost:8080",
+  "http://127.0.0.1:8080"
 ];
 
 const envOrigins = (process.env.CORS_ALLOWED_ORIGINS || "")
@@ -50,7 +52,7 @@ app.use(morgan('short', {
 // Routes
 userRoutes(app);
 sessionRoutes(app);
-health(app);
+healthRoutes(app);
 imageRoutes(app);
 gameRoutes(app);
 leaderboardRoutes(app);

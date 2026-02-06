@@ -1,6 +1,7 @@
 // src/middleware/jwt.js
 import jwt from 'jsonwebtoken';
 import { promisify } from 'util';
+import { normalizeWallet as normalizeWalletUtil } from '../utils/normalize.js';
 
 // Load environment variables
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
@@ -20,7 +21,7 @@ export const signToken = async (payload, options = {}) => {
     payload,
     JWT_SECRET,
     {
-      // expiresIn: JWT_EXPIRES_IN,
+      expiresIn: JWT_EXPIRES_IN,
       algorithm: JWT_ALGORITHM,
       ...options
     }
@@ -49,7 +50,7 @@ export const verifyBrowserToken = async (token) => {
   return verify(token, BROWSER_JWT_SECRET, { algorithms: 'HS256' });
 };
 
-const normalizeWallet = (value) => String(value || "").trim().toLowerCase();
+const normalizeWallet = (value) => normalizeWalletUtil(value) || "";
 
 // Optionally decode browser JWT for /v2/login flows and attach the wallet to the request.
 export const decodeBrowserJwtOptional = async (req, res, next) => {
@@ -73,6 +74,7 @@ export const decodeBrowserJwtOptional = async (req, res, next) => {
     return res.status(401).json({ success: false, message: "invalid token" });
   }
 };
+
 
 /**
  * Middleware to protect routes by verifying JWT token
@@ -100,6 +102,12 @@ export const protect = async (req, res, next) => {
 
     // 2) Verify token
     const decoded = await verifyToken(token);
+    if (decoded?.exp && Date.now() >= decoded.exp * 1000) {
+      return res.status(401).json({
+        status: 'error',
+        message: 'Token expired. Please log in again.'
+      });
+    }
 
     // 3) Check if user still exists (optional, if you want to invalidate tokens for deleted users)
     // const currentUser = await User.findById(decoded.id);
@@ -135,12 +143,11 @@ export const generateAuthToken = async (user) => {
       walletAddress: user.wallet,
       username: user.username,
       role: user.role || 'user',
-      // Add any other user data you want to include
     }
-    // ,
-    // {
-    //   expiresIn: JWT_EXPIRES_IN
-    // }
+    ,
+    {
+      expiresIn: JWT_EXPIRES_IN
+    }
   );
 
   return token;

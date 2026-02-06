@@ -77,7 +77,17 @@ if (hasBaseConfig) {
   console.warn("[onchain] configuration incomplete, skipping blockchain writes");
 }
 
-async function write(functionName, args, tag, { address, abi }) {
+/**
+ * Write to blockchain contract
+ * @param {Object} options - Write options
+ * @param {string} options.functionName - Contract function name
+ * @param {Array} options.args - Function arguments
+ * @param {string} options.tag - Logging tag
+ * @param {string} options.address - Contract address
+ * @param {Array} options.abi - Contract ABI
+ * @returns {Promise<Object>} Transaction result
+ */
+async function write({ functionName, args, tag, address, abi }) {
   if (!walletClient || !publicClient) {
     return { skipped: true, reason: "not-configured" };
   }
@@ -117,12 +127,13 @@ export function deriveSessionKey(sessionId) {
 export async function recordUserRegistration({ walletAddress, username }) {
   if (!walletAddress) return { skipped: true, reason: "wallet-required" };
 
-  return write(
-    "registerPlayer",
-    [walletAddress, username || ""],
-    "registerPlayer",
-    { address: EVENTS_CONTRACT_ADDRESS, abi: eventsAbi }
-  );
+  return write({
+    functionName: "registerPlayer",
+    args: [walletAddress, username || ""],
+    tag: "registerPlayer",
+    address: EVENTS_CONTRACT_ADDRESS,
+    abi: eventsAbi
+  });
 }
 
 export async function recordGameStart({ walletAddress, sessionKey }) {
@@ -130,12 +141,13 @@ export async function recordGameStart({ walletAddress, sessionKey }) {
     return { skipped: true, reason: "missing-params" };
   }
 
-  return write(
-    "recordGameStart",
-    [walletAddress, sessionKey],
-    "recordGameStart",
-    { address: EVENTS_CONTRACT_ADDRESS, abi: eventsAbi }
-  );
+  return write({
+    functionName: "recordGameStart",
+    args: [walletAddress, sessionKey],
+    tag: "recordGameStart",
+    address: EVENTS_CONTRACT_ADDRESS,
+    abi: eventsAbi
+  });
 }
 
 export async function recordGameEnd({
@@ -149,18 +161,19 @@ export async function recordGameEnd({
     return { skipped: true, reason: "missing-params" };
   }
 
-  return write(
-    "recordGameEnd",
-    [
+  return write({
+    functionName: "recordGameEnd",
+    args: [
       walletAddress,
       sessionKey,
       Boolean(completed),
       Number(totalCorrect) || 0,
       Number(currentStreak) || 0
     ],
-    "recordGameEnd",
-    { address: EVENTS_CONTRACT_ADDRESS, abi: eventsAbi }
-  );
+    tag: "recordGameEnd",
+    address: EVENTS_CONTRACT_ADDRESS,
+    abi: eventsAbi
+  });
 }
 
 export async function recordAnswerSubmission({
@@ -184,12 +197,13 @@ export async function recordAnswerSubmission({
     return { skipped: true, reason: "answer-required" };
   }
 
-  return write(
-    "recordSubmission",
-    [walletAddress, sessionKey, questionId, resolvedHash, Boolean(isCorrect)],
-    "recordSubmission",
-    { address: ANSWER_CONTRACT_ADDRESS, abi: answerAbi }
-  );
+  return write({
+    functionName: "recordSubmission",
+    args: [walletAddress, sessionKey, questionId, resolvedHash, Boolean(isCorrect)],
+    tag: "recordSubmission",
+    address: ANSWER_CONTRACT_ADDRESS,
+    abi: answerAbi
+  });
 }
 
 export async function recordSeasonScore({
@@ -201,10 +215,11 @@ export async function recordSeasonScore({
   const finalSeasonId =
     seasonId === undefined || seasonId === null ? DEFAULT_SEASON_ID : seasonId;
 
-  return write(
-    "setSeasonScore",
-    [Number(finalSeasonId), walletAddress, Number(totalCorrect) || 0],
-    "setSeasonScore",
-    { address: LEADERBOARD_CONTRACT_ADDRESS, abi: leaderboardAbi }
-  );
+  return write({
+    functionName: "setSeasonScore",
+    args: [Number(finalSeasonId), walletAddress, Number(totalCorrect) || 0],
+    tag: "setSeasonScore",
+    address: LEADERBOARD_CONTRACT_ADDRESS,
+    abi: leaderboardAbi
+  });
 }

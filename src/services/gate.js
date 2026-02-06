@@ -146,9 +146,18 @@ export async function updateGateUsernameRedis(wallet, newUsername) {
     await redis.set(userKey, JSON.stringify(updatedPayload));
 }
 
-export async function getGateWalletLeaderboard(limit, type = "all") {
-    const safeLimit = Math.max(Number(limit) || 0, 0);
-    if (!safeLimit) return [];
+/**
+ * Get gate wallet leaderboard with pagination
+ * @param {number} limit - Max entries per page (default 10)
+ * @param {string} type - Filter type ('all' or specific type like 'gate_wallet')
+ * @param {number} page - Page number (1-based, default 1)
+ * @param {string} currentWallet - Optional wallet to find user's rank
+ * @returns {Promise<Object>} Leaderboard result with pagination info
+ */
+export async function getGateWalletLeaderboard(limit = 10, type = "all", page = 1, currentWallet = null) {
+    const safeLimit = Math.max(Number(limit) || 10, 1);
+    const safePage = Math.max(Number(page) || 1, 1);
+    const offset = (safePage - 1) * safeLimit;
 
     const keyPrefix = docGateUserKey("");
     const matchPattern = `${keyPrefix}*`;
@@ -196,14 +205,30 @@ export async function getGateWalletLeaderboard(limit, type = "all") {
         }
     } while (cursor !== "0");
 
-    gateDebugLog("getGateWalletLeaderboard candidates", { limit: safeLimit, total: entries.length });
+    gateDebugLog("getGateWalletLeaderboard candidates", { limit: safeLimit, page: safePage, total: entries.length });
+
+    // Sort all entries
     entries.sort((a, b) => {
         if (b.correctAnswers !== a.correctAnswers) return b.correctAnswers - a.correctAnswers;
         if (b.streak !== a.streak) return b.streak - a.streak;
         return b.currentStreak - a.currentStreak;
     });
 
-    return entries.slice(0, safeLimit).map((entry) => ({
+    const totalCount = entries.length;
+    const totalPages = Math.ceil(totalCount / safeLimit);
+
+    // Find current user's rank if wallet provided
+    let currentUserRank = null;
+    if (currentWallet) {
+        const normalizedWallet = currentWallet.toLowerCase();
+        const userIndex = entries.findIndex(e => e.walletAddress.toLowerCase() === normalizedWallet);
+        if (userIndex !== -1) {
+            currentUserRank = userIndex + 1;
+        }
+    }
+
+    // Paginate
+    const paginatedEntries = entries.slice(offset, offset + safeLimit).map((entry) => ({
         rank: entry?.rank || "E",
         username: entry.username,
         walletAddress: entry.walletAddress,
@@ -211,4 +236,17 @@ export async function getGateWalletLeaderboard(limit, type = "all") {
         currentStreak: entry.currentStreak,
         streak: entry.streak,
     }));
+
+    return {
+        data: paginatedEntries,
+        pagination: {
+            page: safePage,
+            limit: safeLimit,
+            totalCount,
+            totalPages,
+            hasNextPage: safePage < totalPages,
+            hasPrevPage: safePage > 1
+        },
+        currentUserRank
+    };
 }
