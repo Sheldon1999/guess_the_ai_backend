@@ -3,14 +3,18 @@ import { users, images } from "./mongo.js";
 import { rankFromCorrect, titleFromStreak } from "./rank.js";
 import { DIRTY_USERS_KEY, docImageKey, docUserKey } from "./redisKeys.js";
 import { flushGateUsers } from "../services/gate.js";
+import {
+  normalizeWallet as normalizeWalletUtil,
+  normalizeHash as normalizeHashUtil
+} from "../utils/normalize.js";
 
 const REDIS_FLUSH_BATCH = Math.max(Number(process.env.REDIS_DATA_FLUSH_BATCH || 100), 1);
 
 const userKey = (wallet) => docUserKey(wallet);
 const imageKey = (hash) => docImageKey(hash);
 
-const normalizeWallet = (w) => String(w || "").trim().toLowerCase();
-const normalizeHash = (h) => String(h || "").trim().toLowerCase();
+const normalizeWallet = (w) => normalizeWalletUtil(w) || "";
+const normalizeHash = (h) => normalizeHashUtil(h) || "";
 const nowIso = () => new Date().toISOString();
 
 export function safeParse(raw) {

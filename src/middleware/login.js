@@ -1,16 +1,13 @@
 import { verifyBrowserToken } from "./jwt.js";
+import { normalizeWallet as normalizeWalletUtil } from "../utils/normalize.js";
 
-function normalizeWallet(w) {
-    return String(w || "").trim().toLowerCase();
-}
+const normalizeWallet = (w) => normalizeWalletUtil(w) || "";
 
 export const putWalletAdd = async (req, res, next) => {
 
     try {
         const jwt = req.body?.jwt;
         const source = req.body?.source;
-
-        console.log("[MIDDLEWARE] got req body:::::: ", req.body);
 
         if (jwt && source) {
             if (source !== "browser") {
