@@ -8,6 +8,18 @@ import {
   getNextImageHandler,
   getNext10ImagesHandler,
   submitAnswerHandler,
+  getClassicQuestionHandler,
+  submitClassicModeAnswerHandler,
+  getMultiSelectQuestionHandler,
+  submitMultiSelectAnswerHandler,
+  getDuelQuestionHandler,
+  submitDuelAnswerHandler,
+  getOddOneOutQuestionHandler,
+  submitOddOneOutAnswerHandler,
+  getCardFlipDeckHandler,
+  submitCardFlipAnswerHandler,
+  getRapidFireQuestionHandler,
+  submitRapidFireAnswerHandler,
   isGateUserEligibleHandler,
   checkGateEligibilityHandler,
   awardGateUserHandler,
@@ -24,6 +36,30 @@ export default function gameRoutes(app) {
 
   // Submit answer
   app.post('/api/game/ans', protect, submitAnswerHandler);
+
+  // Classic mode APIs
+  app.get('/api/game/classic/question', protect, getClassicQuestionHandler);
+  app.post('/api/game/classic/answer', protect, submitClassicModeAnswerHandler);
+
+  // Multi-select mode APIs
+  app.get('/api/game/multiselect/question', protect, getMultiSelectQuestionHandler);
+  app.post('/api/game/multiselect/answer', protect, submitMultiSelectAnswerHandler);
+
+  // Duel mode APIs
+  app.get('/api/game/duel/question', protect, getDuelQuestionHandler);
+  app.post('/api/game/duel/answer', protect, submitDuelAnswerHandler);
+
+  // Odd-one-out mode APIs
+  app.get('/api/game/oddoneout/question', protect, getOddOneOutQuestionHandler);
+  app.post('/api/game/oddoneout/answer', protect, submitOddOneOutAnswerHandler);
+
+  // Card-flip mode APIs
+  app.get('/api/game/cardflip/deck', protect, getCardFlipDeckHandler);
+  app.post('/api/game/cardflip/answer', protect, submitCardFlipAnswerHandler);
+
+  // Rapid-fire mode APIs
+  app.get('/api/game/rapidfire/question', protect, getRapidFireQuestionHandler);
+  app.post('/api/game/rapidfire/answer', protect, submitRapidFireAnswerHandler);
 
   // Check gate user eligibility (authenticated)
   app.get('/api/game/isGateUserEligible', protect, isGateUserEligibleHandler);

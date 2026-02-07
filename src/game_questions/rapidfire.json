@@ -1,0 +1,18 @@
+[
+  {
+    "templateKey": "rapidfire-ai",
+    "imageCount": 1,
+    "aiCount": 1,
+    "humanCount": 0,
+    "timeLimitSec": 30,
+    "lives": 3
+  },
+  {
+    "templateKey": "rapidfire-human",
+    "imageCount": 1,
+    "aiCount": 0,
+    "humanCount": 1,
+    "timeLimitSec": 30,
+    "lives": 3
+  }
+]

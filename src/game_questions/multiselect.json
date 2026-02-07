@@ -1,0 +1,23 @@
+[
+  {
+    "templateKey": "multiselect-2-ai",
+    "imageCount": 6,
+    "aiCount": 2,
+    "humanCount": 4,
+    "askingFor": "ai"
+  },
+  {
+    "templateKey": "multiselect-3-ai",
+    "imageCount": 6,
+    "aiCount": 3,
+    "humanCount": 3,
+    "askingFor": "ai"
+  },
+  {
+    "templateKey": "multiselect-4-ai",
+    "imageCount": 6,
+    "aiCount": 4,
+    "humanCount": 2,
+    "askingFor": "ai"
+  }
+]

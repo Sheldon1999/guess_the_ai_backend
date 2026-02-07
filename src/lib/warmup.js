@@ -3,7 +3,12 @@ import { ObjectId } from "mongodb";
 import redis from "./redis.js";
 import { images } from "./mongo.js";
 import { ensureImageMeta } from "./docCache.js";
-import { READY_QUEUE_KEY, WARM_LAST_KEY } from "./redisKeys.js";
+import {
+  READY_QUEUE_KEY,
+  READY_AI_POOL_KEY,
+  READY_HUMAN_POOL_KEY,
+  WARM_LAST_KEY
+} from "./redisKeys.js";
 
 const CONC = Math.max(Number(process.env.WARMER_CONCURRENCY || 8), 1);
 
@@ -22,9 +27,23 @@ async function saveWarmCursor(id) {
   await redis.set(WARM_LAST_KEY, id.toString());
 }
 
-export async function appendIfMissing(hash) {
+function normalizeLabel(label) {
+  const value = String(label || "").trim().toLowerCase();
+  if (value === "ai" || value === "human") return value;
+  return null;
+}
+
+export async function appendIfMissing(hash, label = null) {
   const pos = await redis.lpos(READY_QUEUE_KEY, hash);
   if (pos === null) await redis.rpush(READY_QUEUE_KEY, hash);
+
+  const normalized = normalizeLabel(label);
+  if (!normalized) return;
+
+  const poolKey = normalized === "ai"
+    ? READY_AI_POOL_KEY
+    : READY_HUMAN_POOL_KEY;
+  await redis.sadd(poolKey, hash);
 }
 
 async function pmap(items, fn, conc = CONC) {
@@ -64,16 +83,19 @@ export async function warmFromMongo(limit) {
     newestId = doc?._id || newestId;
     if (doc?.isActive === false) continue; // skip inactive docs
     if (doc?.hash && typeof doc.hash === "string") {
-      list.push(doc.hash.toLowerCase());
+      list.push({
+        hash: doc.hash.toLowerCase(),
+        label: normalizeLabel(doc.label)
+      });
       await ensureImageMeta(doc).catch(() => {});
     }
   }
-  const total = list.length;
-  const { ok, fail } = await pmap(list, async (hash, index) => {
+  const { ok, fail } = await pmap(list, async (entry, index) => {
+    const hash = entry.hash;
     const seq = index + 1;
     const prefix = `[warmup] hash:${hash}`;
     try {
-      await appendIfMissing(hash);
+      await appendIfMissing(hash, entry.label);
     } catch (enqueueErr) {
       console.warn(`${prefix} enqueue error:${enqueueErr?.message || enqueueErr}`);
       throw enqueueErr;
