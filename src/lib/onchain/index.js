@@ -38,10 +38,11 @@ const hasBaseConfig = Boolean(RPC_URL && PRIVATE_KEY);
 
 let walletClient = null;
 let publicClient = null;
+let account = null;
 
 if (hasBaseConfig) {
   try {
-    const account = privateKeyToAccount(
+    account = privateKeyToAccount(
       PRIVATE_KEY.startsWith("0x") ? PRIVATE_KEY : `0x${PRIVATE_KEY}`
     );
 
@@ -77,6 +78,22 @@ if (hasBaseConfig) {
   console.warn("[onchain] configuration incomplete, skipping blockchain writes");
 }
 
+// Derive a slightly boosted fee set to reduce replacement/underpriced errors
+async function getFeeBump(multiplier = 1.2) {
+  if (!publicClient) return {};
+  try {
+    const fee = await publicClient.estimateFeesPerGas();
+    const bump = (value) =>
+      value !== undefined ? BigInt(Math.ceil(Number(value) * multiplier)) : undefined;
+    return {
+      maxFeePerGas: bump(fee.maxFeePerGas),
+      maxPriorityFeePerGas: bump(fee.maxPriorityFeePerGas)
+    };
+  } catch {
+    return {};
+  }
+}
+
 /**
  * Write to blockchain contract
  * @param {Object} options - Write options
@@ -95,17 +112,54 @@ async function write({ functionName, args, tag, address, abi }) {
     return { skipped: true, reason: "missing-address" };
   }
 
-  try {
-    const hash = await walletClient.writeContract({
+  // Helper to send with optional nonce/fee bump
+  const sendWith = async (opts = {}) =>
+    walletClient.writeContract({
       address,
       abi,
       functionName,
-      args
+      args,
+      ...opts
     });
 
-    const receipt = await publicClient.waitForTransactionReceipt({ hash });
+  try {
+    const feeBump = await getFeeBump(1.25);
+    const hash = await sendWith(feeBump);
+
+    const receipt = await publicClient.waitForTransactionReceipt({
+      hash,
+      timeout: 120_000, // 2 minutes
+      pollingInterval: 3_000
+    });
     return { hash, receipt };
   } catch (error) {
+    // Handle common gas replacement / nonce race by retrying once with higher fee & explicit nonce
+    const msg = error?.shortMessage || error?.message || "";
+    const isUnderpriced =
+      msg.includes("replacement transaction underpriced") ||
+      msg.includes("fee too low") ||
+      msg.includes("invalid parameters");
+
+    if (isUnderpriced && account) {
+      try {
+        const nonce = await publicClient.getTransactionCount({
+          address: account.address,
+          blockTag: "pending"
+        });
+        const feeBump = await getFeeBump(1.35);
+        const hash = await sendWith({ nonce, ...feeBump });
+        const receipt = await publicClient.waitForTransactionReceipt({
+          hash,
+          timeout: 120_000,
+          pollingInterval: 3_000
+        });
+        return { hash, receipt, retried: true };
+      } catch (retryError) {
+        console.error(`[onchain] ${tag} retry failed`, retryError);
+        return { error: retryError };
+      }
+    }
+
     console.error(`[onchain] ${tag} failed`, error);
     return { error };
   }
