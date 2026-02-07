@@ -1,0 +1,20 @@
+[
+  {
+    "templateKey": "duel-normal",
+    "variant": "normal",
+    "imageCount": 2,
+    "aiCount": 1,
+    "humanCount": 1,
+    "askingFor": "ai"
+  },
+  {
+    "templateKey": "duel-speed",
+    "variant": "speed",
+    "imageCount": 2,
+    "aiCount": 1,
+    "humanCount": 1,
+    "askingFor": "ai",
+    "timeLimitSec": 3,
+    "lives": 3
+  }
+]

@@ -1,0 +1,14 @@
+[
+  {
+    "templateKey": "classic-ai-single",
+    "imageCount": 1,
+    "aiCount": 1,
+    "humanCount": 0
+  },
+  {
+    "templateKey": "classic-human-single",
+    "imageCount": 1,
+    "aiCount": 0,
+    "humanCount": 1
+  }
+]

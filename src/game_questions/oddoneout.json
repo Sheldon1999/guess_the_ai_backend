@@ -1,0 +1,16 @@
+[
+  {
+    "templateKey": "odd-one-human",
+    "imageCount": 5,
+    "aiCount": 4,
+    "humanCount": 1,
+    "askingFor": "human"
+  },
+  {
+    "templateKey": "odd-one-ai",
+    "imageCount": 5,
+    "aiCount": 1,
+    "humanCount": 4,
+    "askingFor": "ai"
+  }
+]
