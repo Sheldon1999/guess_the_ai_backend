@@ -128,8 +128,8 @@ async function write({ functionName, args, tag, address, abi }) {
 
     const receipt = await publicClient.waitForTransactionReceipt({
       hash,
-      timeout: 120_000, // 2 minutes
-      pollingInterval: 3_000
+      timeout: 300_000, // 5 minutes to account for slower finality
+      pollingInterval: 4_000
     });
     return { hash, receipt };
   } catch (error) {
@@ -150,14 +150,23 @@ async function write({ functionName, args, tag, address, abi }) {
         const hash = await sendWith({ nonce, ...feeBump });
         const receipt = await publicClient.waitForTransactionReceipt({
           hash,
-          timeout: 120_000,
-          pollingInterval: 3_000
+          timeout: 300_000,
+          pollingInterval: 4_000
         });
         return { hash, receipt, retried: true };
       } catch (retryError) {
         console.error(`[onchain] ${tag} retry failed`, retryError);
         return { error: retryError };
       }
+    }
+
+    // If receipt not found yet, surface hash so caller can poll later
+    if ((error?.shortMessage || "").includes("could not be found")) {
+      console.warn(`[onchain] ${tag} pending; receipt not found yet`, {
+        message: error.shortMessage,
+        hash: error?.transactionHash
+      });
+      return { pending: true, hash: error?.transactionHash };
     }
 
     console.error(`[onchain] ${tag} failed`, error);
