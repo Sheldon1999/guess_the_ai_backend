@@ -283,10 +283,13 @@ function buildQuestionResponse(mode, template, hashes) {
     hash,
     url: buildImageUrl(hash)
   }));
+  const choiceMeta = buildQuestionChoices(mode, template);
 
   return {
     mode,
     templateKey: template.templateKey,
+    questionText: template.questionText || null,
+    questionSubtext: template.questionSubtext || null,
     variant: template.variant || null,
     askingFor: template.askingFor || null,
     imageCount: template.imageCount,
@@ -296,6 +299,8 @@ function buildQuestionResponse(mode, template, hashes) {
       timeLimitSec: Number.isInteger(template.timeLimitSec) ? template.timeLimitSec : null,
       lives: Number.isInteger(template.lives) ? template.lives : null
     },
+    choiceType: choiceMeta.choiceType,
+    choices: choiceMeta.choices,
     images: imagesList
   };
 }
@@ -345,6 +350,49 @@ function buildScore(delta, correctCount, wrongCount) {
     delta,
     correctCount,
     wrongCount
+  };
+}
+
+function buildQuestionChoices(mode, template) {
+  if (mode === 'classic' || mode === 'cardflip' || mode === 'rapidfire') {
+    return {
+      choiceType: 'binary',
+      choices: [
+        { value: 'ai', label: 'AI' },
+        { value: 'human', label: 'Human' }
+      ]
+    };
+  }
+
+  if (mode === 'duel') {
+    return {
+      choiceType: 'single-image',
+      choices: [
+        { value: '0', label: 'A' },
+        { value: '1', label: 'B' }
+      ]
+    };
+  }
+
+  if (mode === 'oddoneout') {
+    const count = Number.isInteger(template.imageCount) ? template.imageCount : 5;
+    return {
+      choiceType: 'single-image',
+      choices: Array.from({ length: count }, (_, idx) => ({
+        value: String(idx),
+        label: `Image ${idx + 1}`
+      }))
+    };
+  }
+
+  return {
+    choiceType: 'multi-image',
+    choices: [
+      {
+        value: template.askingFor || 'ai',
+        label: `Select all ${(template.askingFor || 'ai').toUpperCase()} images`
+      }
+    ]
   };
 }
 

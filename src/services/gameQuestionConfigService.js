@@ -15,12 +15,7 @@ const MODE_FILES = {
   rapidfire: 'rapidfire.json'
 };
 
-const COUNT_REQUIRED_MODES = new Set([
-  'multiselect',
-  'duel',
-  'oddoneout',
-  'cardflip'
-]);
+const COUNT_REQUIRED_MODES = new Set(Object.keys(MODE_FILES));
 
 const QUESTION_REQUIRED_MODES = new Set([
   'multiselect',
@@ -41,9 +36,14 @@ function validateTemplate(mode, template, index) {
     throw new Error(`[QuestionConfig] ${mode}[${index}] must be an object`);
   }
 
+  const questionText = String(template.questionText || '').trim();
   const imageCount = toInt(template.imageCount);
   const aiCount = toInt(template.aiCount);
   const humanCount = toInt(template.humanCount);
+
+  if (!questionText) {
+    throw new Error(`[QuestionConfig] ${mode}[${index}] questionText is required`);
+  }
 
   if (!Number.isInteger(imageCount) || imageCount <= 0) {
     throw new Error(`[QuestionConfig] ${mode}[${index}] has invalid imageCount`);
@@ -67,6 +67,20 @@ function validateTemplate(mode, template, index) {
     const askingFor = String(template.askingFor || '').trim().toLowerCase();
     if (askingFor !== 'ai' && askingFor !== 'human') {
       throw new Error(`[QuestionConfig] ${mode}[${index}] askingFor must be 'ai' or 'human'`);
+    }
+  }
+
+  if (template.askingFor != null) {
+    const normalizedAskingFor = String(template.askingFor).trim().toLowerCase();
+    if (normalizedAskingFor !== 'ai' && normalizedAskingFor !== 'human') {
+      throw new Error(`[QuestionConfig] ${mode}[${index}] askingFor must be 'ai' or 'human'`);
+    }
+  }
+
+  if (mode === 'duel' && template.variant) {
+    const normalizedVariant = String(template.variant).trim().toLowerCase();
+    if (normalizedVariant !== 'normal' && normalizedVariant !== 'speed') {
+      throw new Error(`[QuestionConfig] ${mode}[${index}] variant must be 'normal' or 'speed'`);
     }
   }
 
@@ -100,6 +114,8 @@ async function readModeTemplates(mode, filename) {
   return parsed.map((template, idx) => ({
     ...template,
     templateKey: String(template.templateKey || `${mode}-${idx + 1}`),
+    questionText: String(template.questionText || '').trim(),
+    questionSubtext: template.questionSubtext ? String(template.questionSubtext).trim() : null,
     imageCount: toInt(template.imageCount),
     aiCount: Number.isInteger(toInt(template.aiCount)) ? toInt(template.aiCount) : null,
     humanCount: Number.isInteger(toInt(template.humanCount)) ? toInt(template.humanCount) : null,

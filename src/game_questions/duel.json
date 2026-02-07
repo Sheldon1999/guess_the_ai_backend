@@ -1,6 +1,7 @@
 [
   {
-    "templateKey": "duel-normal",
+    "templateKey": "duel-normal-pick-ai",
+    "questionText": "Choose the AI-generated image.",
     "variant": "normal",
     "imageCount": 2,
     "aiCount": 1,
@@ -8,12 +9,33 @@
     "askingFor": "ai"
   },
   {
-    "templateKey": "duel-speed",
+    "templateKey": "duel-normal-pick-human",
+    "questionText": "Choose the Human image.",
+    "variant": "normal",
+    "imageCount": 2,
+    "aiCount": 1,
+    "humanCount": 1,
+    "askingFor": "human"
+  },
+  {
+    "templateKey": "duel-speed-pick-ai",
+    "questionText": "Speed round: pick the AI image before time runs out.",
     "variant": "speed",
     "imageCount": 2,
     "aiCount": 1,
     "humanCount": 1,
     "askingFor": "ai",
+    "timeLimitSec": 3,
+    "lives": 3
+  },
+  {
+    "templateKey": "duel-speed-pick-human",
+    "questionText": "Speed round: pick the Human image before time runs out.",
+    "variant": "speed",
+    "imageCount": 2,
+    "aiCount": 1,
+    "humanCount": 1,
+    "askingFor": "human",
     "timeLimitSec": 3,
     "lives": 3
   }
