@@ -1,6 +1,8 @@
 [
   {
-    "templateKey": "rapidfire-ai",
+    "templateKey": "rapidfire-ai-1",
+    "questionText": "Rapid fire: AI or Human?",
+    "questionSubtext": "Answer quickly to build combo.",
     "imageCount": 1,
     "aiCount": 1,
     "humanCount": 0,
@@ -8,7 +10,29 @@
     "lives": 3
   },
   {
-    "templateKey": "rapidfire-human",
+    "templateKey": "rapidfire-human-1",
+    "questionText": "Fast call: classify this image as AI or Human.",
+    "questionSubtext": "Wrong answers cost lives.",
+    "imageCount": 1,
+    "aiCount": 0,
+    "humanCount": 1,
+    "timeLimitSec": 30,
+    "lives": 3
+  },
+  {
+    "templateKey": "rapidfire-ai-2",
+    "questionText": "Instant decision: AI-made or human-made?",
+    "questionSubtext": "Keep your streak alive.",
+    "imageCount": 1,
+    "aiCount": 1,
+    "humanCount": 0,
+    "timeLimitSec": 30,
+    "lives": 3
+  },
+  {
+    "templateKey": "rapidfire-human-2",
+    "questionText": "Read the image fast and pick AI or Human.",
+    "questionSubtext": "Speed and precision both count.",
     "imageCount": 1,
     "aiCount": 0,
     "humanCount": 1,

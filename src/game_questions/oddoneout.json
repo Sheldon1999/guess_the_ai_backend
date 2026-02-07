@@ -1,13 +1,31 @@
 [
   {
-    "templateKey": "odd-one-human",
+    "templateKey": "odd-one-human-1",
+    "questionText": "Find the one Human image among four AI images.",
     "imageCount": 5,
     "aiCount": 4,
     "humanCount": 1,
     "askingFor": "human"
   },
   {
-    "templateKey": "odd-one-ai",
+    "templateKey": "odd-one-human-2",
+    "questionText": "Spot the odd Human image.",
+    "imageCount": 5,
+    "aiCount": 4,
+    "humanCount": 1,
+    "askingFor": "human"
+  },
+  {
+    "templateKey": "odd-one-ai-1",
+    "questionText": "Find the one AI image among four Human images.",
+    "imageCount": 5,
+    "aiCount": 1,
+    "humanCount": 4,
+    "askingFor": "ai"
+  },
+  {
+    "templateKey": "odd-one-ai-2",
+    "questionText": "Spot the odd AI image.",
     "imageCount": 5,
     "aiCount": 1,
     "humanCount": 4,

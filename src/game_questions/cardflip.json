@@ -1,6 +1,16 @@
 [
   {
-    "templateKey": "cardflip-balanced-20",
+    "templateKey": "cardflip-balanced-20-v1",
+    "questionText": "Flip a card, then decide: AI or Human?",
+    "questionSubtext": "Answer all cards to complete the deck.",
+    "imageCount": 20,
+    "aiCount": 10,
+    "humanCount": 10
+  },
+  {
+    "templateKey": "cardflip-balanced-20-v2",
+    "questionText": "Reveal each card and classify it as AI or Human.",
+    "questionSubtext": "Accuracy matters across the full deck.",
     "imageCount": 20,
     "aiCount": 10,
     "humanCount": 10
