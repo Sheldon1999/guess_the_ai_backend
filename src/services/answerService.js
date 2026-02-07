@@ -12,7 +12,7 @@ import {
 } from './answerHandler.js';
 import { getGateUserRedis, updateGateUserScoreRedis } from './gate.js';
 import { loadSession } from './sessionService.js';
-import { recordAnswerSubmission, recordSeasonScore } from '../lib/onchain/index.js';
+import { recordAnswerSubmissionHash, recordSeasonScore } from '../lib/onchain/index.js';
 import { toQuestionId } from '../utils/crypto.js';
 
 /**
@@ -41,8 +41,11 @@ export async function processAnswer(params) {
   // Update gate user stats if applicable
   await updateGateStats(walletAddress, response);
 
-  // Record to blockchain (fire-and-forget)
-  recordOnchain(walletAddress, response, hash);
+  // Record to blockchain and attach tx hash if available
+  const onchain = await recordOnchainWithHash(walletAddress, response, hash);
+  if (onchain?.transactionHash) {
+    response.onchain = onchain;
+  }
 
   return response;
 }
@@ -132,47 +135,46 @@ async function updateGateStats(walletAddress, response) {
  * @param {Object} response - Answer response
  * @param {string} hash - Image hash
  */
-function recordOnchain(walletAddress, response, hash) {
+async function recordOnchainWithHash(walletAddress, response, hash) {
   // Get session for blockchain recording
-  loadSession(walletAddress)
-    .then(session => {
-      const sessionKey = session?.sessionKey;
-      const questionId = toQuestionId(response.imageId ?? hash);
+  try {
+    const session = await loadSession(walletAddress);
+    const sessionKey = session?.sessionKey;
+    const questionId = toQuestionId(response.imageId ?? hash);
+    if (!sessionKey) return null;
 
-      // Record answer submission
-      recordAnswerSubmission({
+    const submission = await recordAnswerSubmissionHash({
+      walletAddress,
+      sessionKey,
+      questionId,
+      answer: response.truth,
+      isCorrect: response.correct
+    });
+
+    if (submission?.error) {
+      console.error('[AnswerService] onchain submission error:', submission.error);
+    }
+
+    if (response.correct && response.profile?.correctAnswers != null) {
+      recordSeasonScore({
         walletAddress,
-        sessionKey,
-        questionId,
-        answer: response.truth,
-        isCorrect: response.correct
+        totalCorrect: response.profile.correctAnswers
       })
         .then(result => {
           if (result?.error) {
-            console.error('[AnswerService] onchain submission error:', result.error);
+            console.error('[AnswerService] onchain leaderboard error:', result.error);
           }
         })
         .catch(error => {
-          console.error('[AnswerService] onchain submission exception:', error);
+          console.error('[AnswerService] onchain leaderboard exception:', error);
         });
+    }
 
-      // Record season score if correct
-      if (response.correct && response.profile?.correctAnswers != null) {
-        recordSeasonScore({
-          walletAddress,
-          totalCorrect: response.profile.correctAnswers
-        })
-          .then(result => {
-            if (result?.error) {
-              console.error('[AnswerService] onchain leaderboard error:', result.error);
-            }
-          })
-          .catch(error => {
-            console.error('[AnswerService] onchain leaderboard exception:', error);
-          });
-      }
-    })
-    .catch(() => {
-      // Session not found, skip onchain recording
-    });
+    if (submission?.hash) {
+      return { transactionHash: submission.hash };
+    }
+  } catch {
+    // Session not found or onchain failure
+  }
+  return null;
 }

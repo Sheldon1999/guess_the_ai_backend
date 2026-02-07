@@ -174,6 +174,59 @@ async function write({ functionName, args, tag, address, abi }) {
   }
 }
 
+/**
+ * Submit a transaction and return the hash without waiting for a receipt.
+ * @param {Object} options - Write options
+ * @returns {Promise<Object>} Transaction hash result
+ */
+async function writeNoWait({ functionName, args, tag, address, abi }) {
+  if (!walletClient || !publicClient) {
+    return { skipped: true, reason: "not-configured" };
+  }
+  if (!address) {
+    return { skipped: true, reason: "missing-address" };
+  }
+
+  const sendWith = async (opts = {}) =>
+    walletClient.writeContract({
+      address,
+      abi,
+      functionName,
+      args,
+      ...opts
+    });
+
+  try {
+    const feeBump = await getFeeBump(1.25);
+    const hash = await sendWith(feeBump);
+    return { hash };
+  } catch (error) {
+    const msg = error?.shortMessage || error?.message || "";
+    const isUnderpriced =
+      msg.includes("replacement transaction underpriced") ||
+      msg.includes("fee too low") ||
+      msg.includes("invalid parameters");
+
+    if (isUnderpriced && account) {
+      try {
+        const nonce = await publicClient.getTransactionCount({
+          address: account.address,
+          blockTag: "pending"
+        });
+        const feeBump = await getFeeBump(1.35);
+        const hash = await sendWith({ nonce, ...feeBump });
+        return { hash, retried: true };
+      } catch (retryError) {
+        console.error(`[onchain] ${tag} retry failed`, retryError);
+        return { error: retryError };
+      }
+    }
+
+    console.error(`[onchain] ${tag} failed`, error);
+    return { error };
+  }
+}
+
 export function deriveSessionKey(sessionId) {
   if (!sessionId) throw new Error("session id required");
   if (isHex(sessionId)) {
@@ -261,6 +314,36 @@ export async function recordAnswerSubmission({
   }
 
   return write({
+    functionName: "recordSubmission",
+    args: [walletAddress, sessionKey, questionId, resolvedHash, Boolean(isCorrect)],
+    tag: "recordSubmission",
+    address: ANSWER_CONTRACT_ADDRESS,
+    abi: answerAbi
+  });
+}
+
+export async function recordAnswerSubmissionHash({
+  walletAddress,
+  sessionKey,
+  questionId,
+  answer,
+  answerHash,
+  isCorrect
+}) {
+  if (!walletAddress) return { skipped: true, reason: "wallet-required" };
+  if (!sessionKey) return { skipped: true, reason: "session-required" };
+  if (questionId === undefined || questionId === null) {
+    return { skipped: true, reason: "question-required" };
+  }
+
+  const resolvedHash =
+    answerHash ||
+    (answer ? keccak256(stringToBytes(String(answer))) : undefined);
+  if (!resolvedHash) {
+    return { skipped: true, reason: "answer-required" };
+  }
+
+  return writeNoWait({
     functionName: "recordSubmission",
     args: [walletAddress, sessionKey, questionId, resolvedHash, Boolean(isCorrect)],
     tag: "recordSubmission",
