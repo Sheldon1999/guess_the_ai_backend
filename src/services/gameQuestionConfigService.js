@@ -1,4 +1,3 @@
-import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -102,8 +101,7 @@ function validateTemplate(mode, template, index) {
 
 async function readModeTemplates(mode, filename) {
   const fullPath = path.resolve(QUESTION_DIR, filename);
-  const raw = await readFile(fullPath, 'utf8');
-  const parsed = JSON.parse(raw);
+  const parsed = (await import(fullPath, { with: { type: 'json' } })).default;
 
   if (!Array.isArray(parsed) || parsed.length === 0) {
     throw new Error(`[QuestionConfig] ${mode} file must contain a non-empty array`);
