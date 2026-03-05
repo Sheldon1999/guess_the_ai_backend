@@ -6,14 +6,31 @@
 import * as gameService from '../services/gameService.js';
 import * as answerService from '../services/answerService.js';
 import * as eligibilityService from '../services/eligibilityService.js';
+import * as gameModeService from '../services/gameModeService.js';
 import {
   sendSuccess,
   sendError,
   sendValidationError,
   sendServerError
 } from '../utils/response.js';
-import { isValidHash, isValidGuess } from '../utils/validation.js';
 import { normalizeGuess, normalizeHash, normalizeWallet } from '../utils/normalize.js';
+import { isValidGuess, isValidHash } from '../utils/validation.js';
+
+function isValidationError(error) {
+  const message = String(error?.message || '');
+  return (
+    message.includes('required') ||
+    message.includes('invalid') ||
+    message.includes('must be') ||
+    message.includes('Unsupported')
+  );
+}
+
+function pickVariant(req) {
+  const fromQuery = String(req.query?.variant || '').trim();
+  const fromBody = String(req.body?.variant || '').trim();
+  return (fromQuery || fromBody || null);
+}
 
 /**
  * Get next single image
@@ -67,10 +84,10 @@ export async function submitAnswerHandler(req, res) {
     const isBackup = Boolean(req.body?.isBackup);
 
     // Validate inputs
-    if (!hash) {
+    if (!isValidHash(hash)) {
       return sendValidationError(res, 'Hash is required');
     }
-    if (!guess) {
+    if (!isValidGuess(guess)) {
       return sendValidationError(res, "Guess must be 'ai' or 'human'");
     }
 
@@ -88,6 +105,204 @@ export async function submitAnswerHandler(req, res) {
     return res.json(result);
   } catch (error) {
     return sendServerError(res, error, 'GameController.submitAnswer');
+  }
+}
+
+/**
+ * Get classic mode question
+ * GET /api/game/classic/question
+ */
+export async function getClassicQuestionHandler(req, res) {
+  try {
+    const question = await gameModeService.getModeQuestion('classic', pickVariant(req));
+    return sendSuccess(res, question);
+  } catch (error) {
+    if (isValidationError(error)) {
+      return sendValidationError(res, error.message);
+    }
+    return sendServerError(res, error, 'GameController.getClassicQuestion');
+  }
+}
+
+/**
+ * Submit classic mode answer
+ * POST /api/game/classic/answer
+ */
+export async function submitClassicModeAnswerHandler(req, res) {
+  try {
+    const walletAddress = req.user.walletAddress;
+    const result = await gameModeService.answerClassic(walletAddress, req.body);
+    return sendSuccess(res, result);
+  } catch (error) {
+    if (isValidationError(error)) {
+      return sendValidationError(res, error.message);
+    }
+    return sendServerError(res, error, 'GameController.submitClassicModeAnswer');
+  }
+}
+
+/**
+ * Get multiselect mode question
+ * GET /api/game/multiselect/question
+ */
+export async function getMultiSelectQuestionHandler(req, res) {
+  try {
+    const question = await gameModeService.getModeQuestion('multiselect', pickVariant(req));
+    return sendSuccess(res, question);
+  } catch (error) {
+    if (isValidationError(error)) {
+      return sendValidationError(res, error.message);
+    }
+    return sendServerError(res, error, 'GameController.getMultiSelectQuestion');
+  }
+}
+
+/**
+ * Submit multiselect mode answer
+ * POST /api/game/multiselect/answer
+ */
+export async function submitMultiSelectAnswerHandler(req, res) {
+  try {
+    const walletAddress = req.user.walletAddress;
+    const result = await gameModeService.answerMultiSelect(walletAddress, req.body);
+    return sendSuccess(res, result);
+  } catch (error) {
+    if (isValidationError(error)) {
+      return sendValidationError(res, error.message);
+    }
+    return sendServerError(res, error, 'GameController.submitMultiSelectAnswer');
+  }
+}
+
+/**
+ * Get duel mode question
+ * GET /api/game/duel/question
+ */
+export async function getDuelQuestionHandler(req, res) {
+  try {
+    const question = await gameModeService.getModeQuestion('duel', pickVariant(req));
+    return sendSuccess(res, question);
+  } catch (error) {
+    if (isValidationError(error)) {
+      return sendValidationError(res, error.message);
+    }
+    return sendServerError(res, error, 'GameController.getDuelQuestion');
+  }
+}
+
+/**
+ * Submit duel mode answer
+ * POST /api/game/duel/answer
+ */
+export async function submitDuelAnswerHandler(req, res) {
+  try {
+    const walletAddress = req.user.walletAddress;
+    const result = await gameModeService.answerDuel(walletAddress, req.body);
+    return sendSuccess(res, result);
+  } catch (error) {
+    if (isValidationError(error)) {
+      return sendValidationError(res, error.message);
+    }
+    return sendServerError(res, error, 'GameController.submitDuelAnswer');
+  }
+}
+
+/**
+ * Get odd-one-out mode question
+ * GET /api/game/oddoneout/question
+ */
+export async function getOddOneOutQuestionHandler(req, res) {
+  try {
+    const question = await gameModeService.getModeQuestion('oddoneout', pickVariant(req));
+    return sendSuccess(res, question);
+  } catch (error) {
+    if (isValidationError(error)) {
+      return sendValidationError(res, error.message);
+    }
+    return sendServerError(res, error, 'GameController.getOddOneOutQuestion');
+  }
+}
+
+/**
+ * Submit odd-one-out mode answer
+ * POST /api/game/oddoneout/answer
+ */
+export async function submitOddOneOutAnswerHandler(req, res) {
+  try {
+    const walletAddress = req.user.walletAddress;
+    const result = await gameModeService.answerOddOneOut(walletAddress, req.body);
+    return sendSuccess(res, result);
+  } catch (error) {
+    if (isValidationError(error)) {
+      return sendValidationError(res, error.message);
+    }
+    return sendServerError(res, error, 'GameController.submitOddOneOutAnswer');
+  }
+}
+
+/**
+ * Get cardflip mode deck
+ * GET /api/game/cardflip/deck
+ */
+export async function getCardFlipDeckHandler(req, res) {
+  try {
+    const question = await gameModeService.getModeQuestion('cardflip', pickVariant(req));
+    return sendSuccess(res, question);
+  } catch (error) {
+    if (isValidationError(error)) {
+      return sendValidationError(res, error.message);
+    }
+    return sendServerError(res, error, 'GameController.getCardFlipDeck');
+  }
+}
+
+/**
+ * Submit cardflip mode answer
+ * POST /api/game/cardflip/answer
+ */
+export async function submitCardFlipAnswerHandler(req, res) {
+  try {
+    const walletAddress = req.user.walletAddress;
+    const result = await gameModeService.answerCardFlip(walletAddress, req.body);
+    return sendSuccess(res, result);
+  } catch (error) {
+    if (isValidationError(error)) {
+      return sendValidationError(res, error.message);
+    }
+    return sendServerError(res, error, 'GameController.submitCardFlipAnswer');
+  }
+}
+
+/**
+ * Get rapidfire mode question
+ * GET /api/game/rapidfire/question
+ */
+export async function getRapidFireQuestionHandler(req, res) {
+  try {
+    const question = await gameModeService.getModeQuestion('rapidfire', pickVariant(req));
+    return sendSuccess(res, question);
+  } catch (error) {
+    if (isValidationError(error)) {
+      return sendValidationError(res, error.message);
+    }
+    return sendServerError(res, error, 'GameController.getRapidFireQuestion');
+  }
+}
+
+/**
+ * Submit rapidfire mode answer
+ * POST /api/game/rapidfire/answer
+ */
+export async function submitRapidFireAnswerHandler(req, res) {
+  try {
+    const walletAddress = req.user.walletAddress;
+    const result = await gameModeService.answerRapidFire(walletAddress, req.body);
+    return sendSuccess(res, result);
+  } catch (error) {
+    if (isValidationError(error)) {
+      return sendValidationError(res, error.message);
+    }
+    return sendServerError(res, error, 'GameController.submitRapidFireAnswer');
   }
 }
 

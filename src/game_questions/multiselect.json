@@ -1,0 +1,50 @@
+[
+  {
+    "templateKey": "multiselect-2-ai",
+    "questionText": "Select all AI-generated images.",
+    "imageCount": 6,
+    "aiCount": 2,
+    "humanCount": 4,
+    "askingFor": "ai"
+  },
+  {
+    "templateKey": "multiselect-3-ai",
+    "questionText": "Find every AI image in this grid.",
+    "imageCount": 6,
+    "aiCount": 3,
+    "humanCount": 3,
+    "askingFor": "ai"
+  },
+  {
+    "templateKey": "multiselect-4-ai",
+    "questionText": "Mark all images that look AI-generated.",
+    "imageCount": 6,
+    "aiCount": 4,
+    "humanCount": 2,
+    "askingFor": "ai"
+  },
+  {
+    "templateKey": "multiselect-2-human",
+    "questionText": "Select all real human-captured images.",
+    "imageCount": 6,
+    "aiCount": 4,
+    "humanCount": 2,
+    "askingFor": "human"
+  },
+  {
+    "templateKey": "multiselect-3-human",
+    "questionText": "Pick every Human image and leave AI unselected.",
+    "imageCount": 6,
+    "aiCount": 3,
+    "humanCount": 3,
+    "askingFor": "human"
+  },
+  {
+    "templateKey": "multiselect-4-human",
+    "questionText": "Tap all Human images in this round.",
+    "imageCount": 6,
+    "aiCount": 2,
+    "humanCount": 4,
+    "askingFor": "human"
+  }
+]
