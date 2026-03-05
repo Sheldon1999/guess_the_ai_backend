@@ -14,6 +14,7 @@ import {
   sendServerError
 } from '../utils/response.js';
 import { normalizeGuess, normalizeHash, normalizeWallet } from '../utils/normalize.js';
+import { isValidGuess, isValidHash } from '../utils/validation.js';
 
 function isValidationError(error) {
   const message = String(error?.message || '');
@@ -83,10 +84,10 @@ export async function submitAnswerHandler(req, res) {
     const isBackup = Boolean(req.body?.isBackup);
 
     // Validate inputs
-    if (!hash) {
+    if (!isValidHash(hash)) {
       return sendValidationError(res, 'Hash is required');
     }
-    if (!guess) {
+    if (!isValidGuess(guess)) {
       return sendValidationError(res, "Guess must be 'ai' or 'human'");
     }
 
