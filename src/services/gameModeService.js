@@ -66,8 +66,14 @@ function toSafeInt(value) {
   return Math.max(0, Math.trunc(numeric));
 }
 
+function toInt(value, fallback = 0) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return fallback;
+  return Math.trunc(numeric);
+}
+
 async function applyModeProgress(walletAddress, { delta = 0, isCorrectRound = false } = {}) {
-  const safeDelta = toSafeInt(delta);
+  const safeDelta = toInt(delta, 0);
 
   const updatedProfile = await updateCachedUser(walletAddress, (current) => {
     const correctAnswers = toSafeInt(current?.correctAnswers);
@@ -79,7 +85,7 @@ async function applyModeProgress(walletAddress, { delta = 0, isCorrectRound = fa
 
     return {
       ...current,
-      correctAnswers: correctAnswers + safeDelta,
+      correctAnswers: Math.max(0, correctAnswers + safeDelta),
       currentStreak: nextCurrentStreak,
       streak: nextBestStreak,
       // Let cache helper recalculate rank/title from updated counters.
@@ -462,6 +468,7 @@ export async function answerMultiSelect(walletAddress, payload = {}) {
 
   let correctCount = 0;
   let wrongCount = 0;
+  let wrongSelectedCount = 0;
 
   const results = hashes.map((hash) => {
     const truth = truthMap.get(hash) || null;
@@ -470,7 +477,12 @@ export async function answerMultiSelect(walletAddress, payload = {}) {
     const isCorrect = truth ? selected === shouldSelect : false;
 
     if (isCorrect) correctCount += 1;
-    else wrongCount += 1;
+    else {
+      wrongCount += 1;
+      if (selected && !shouldSelect) {
+        wrongSelectedCount += 1;
+      }
+    }
 
     return {
       hash,
@@ -481,7 +493,7 @@ export async function answerMultiSelect(walletAddress, payload = {}) {
     };
   });
 
-  const delta = Math.max(0, correctCount * 20 - wrongCount * 10);
+  const delta = wrongSelectedCount > 0 ? 0 : correctCount;
   const isPerfectRound = wrongCount === 0 && hashes.length > 0;
   const profile = await applyModeProgress(walletAddress, {
     delta,
@@ -518,8 +530,9 @@ export async function answerDuel(walletAddress, payload = {}) {
     isCorrect: hash === selectedHash ? isCorrect : true
   }));
 
-  const basePoints = variant === 'speed' ? 25 : 15;
-  const delta = isCorrect ? basePoints : 0;
+  const delta = variant === 'speed'
+    ? (isCorrect ? 2 : -1)
+    : (isCorrect ? 1 : 0);
   const profile = await applyModeProgress(walletAddress, {
     delta,
     isCorrectRound: isCorrect
@@ -562,7 +575,7 @@ export async function answerOddOneOut(walletAddress, payload = {}) {
     isCorrect: hash === selectedHash ? isCorrect : true
   }));
 
-  const delta = isCorrect ? 30 : 0;
+  const delta = isCorrect ? 5 : 0;
   const profile = await applyModeProgress(walletAddress, {
     delta,
     isCorrectRound: isCorrect
@@ -591,11 +604,11 @@ export async function answerCardFlip(walletAddress, payload = {}) {
   const truth = truthMap.get(hash) || null;
   const isCorrect = truth ? guess === truth : false;
   const profile = await applyModeProgress(walletAddress, {
-    delta: isCorrect ? 15 : 0,
+    delta: isCorrect ? 1 : 0,
     isCorrectRound: isCorrect
   });
 
-  return buildModeAnswer('cardflip', [{ hash, guess, truth, isCorrect }], buildScore(isCorrect ? 15 : 0, isCorrect ? 1 : 0, isCorrect ? 0 : 1), profile);
+  return buildModeAnswer('cardflip', [{ hash, guess, truth, isCorrect }], buildScore(isCorrect ? 1 : 0, isCorrect ? 1 : 0, isCorrect ? 0 : 1), profile);
 }
 
 export async function answerRapidFire(walletAddress, payload = {}) {
@@ -616,7 +629,7 @@ export async function answerRapidFire(walletAddress, payload = {}) {
   const isCorrect = truth ? guess === truth : false;
 
   const safeCombo = Number.isFinite(combo) ? Math.max(0, Math.trunc(combo)) : 0;
-  const delta = isCorrect ? 10 + ((safeCombo + 1) * 2) : 0;
+  const delta = isCorrect ? 3 : -1;
   const profile = await applyModeProgress(walletAddress, {
     delta,
     isCorrectRound: isCorrect
