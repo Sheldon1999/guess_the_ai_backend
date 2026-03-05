@@ -1,0 +1,30 @@
+[
+  {
+    "templateKey": "classic-ai-single-1",
+    "questionText": "Is this image AI-generated or human-made?",
+    "imageCount": 1,
+    "aiCount": 1,
+    "humanCount": 0
+  },
+  {
+    "templateKey": "classic-human-single-1",
+    "questionText": "Trust your eye: AI or Human?",
+    "imageCount": 1,
+    "aiCount": 0,
+    "humanCount": 1
+  },
+  {
+    "templateKey": "classic-ai-single-2",
+    "questionText": "One image, one call. Choose AI or Human.",
+    "imageCount": 1,
+    "aiCount": 1,
+    "humanCount": 0
+  },
+  {
+    "templateKey": "classic-human-single-2",
+    "questionText": "Decide the source of this image: AI or Human.",
+    "imageCount": 1,
+    "aiCount": 0,
+    "humanCount": 1
+  }
+]

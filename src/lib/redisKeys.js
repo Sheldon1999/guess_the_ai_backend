@@ -3,6 +3,8 @@ const withPrefix = (suffix = "") => `${REDIS_KEY_PREFIX}${suffix}`;
 
 // Common queue keys
 export const READY_QUEUE_KEY = withPrefix("ready:q");
+export const READY_AI_POOL_KEY = withPrefix("ready:label:ai:set");
+export const READY_HUMAN_POOL_KEY = withPrefix("ready:label:human:set");
 
 // Reusable builders
 export const sessionKey = (wallet) => withPrefix(`session:${wallet}`);
