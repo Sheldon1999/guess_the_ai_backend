@@ -14,6 +14,7 @@ import { rankFromCorrect, titleFromStreak, rankSwitchExpression, titleSwitchExpr
 import backupAnswerList from '../lib/backup_answer.js';
 import { getTruthLabel } from '../lib/kv.js';
 import { images, users } from '../lib/mongo.js';
+import { findCanonicalUserByWallet } from '../lib/userStore.js';
 import { normalizeHash, normalizeGuess } from '../utils/normalize.js';
 
 /**
@@ -168,6 +169,22 @@ export async function handleMongoAnswer(walletAddress, imageHash, userGuess) {
     }
 
     const isCorrectAnswer = truthLabel ? userGuess === truthLabel : false;
+    const existingUser = await findCanonicalUserByWallet(walletAddress, {
+      projection: {
+        _id: 1,
+        username: 1,
+        correctAnswers: 1,
+        currentStreak: 1,
+        streak: 1,
+        rank: 1,
+        dungeonTitle: 1
+      },
+      logLabel: 'answerHandler.handleMongoAnswer'
+    });
+
+    if (!existingUser) {
+      return null;
+    }
 
     // MongoDB aggregation expressions for atomic update
     const baseCorrectAnswers = { $ifNull: ['$correctAnswers', 0] };
@@ -190,7 +207,7 @@ export async function handleMongoAnswer(walletAddress, imageHash, userGuess) {
     const dungeonTitleExpression = titleSwitchExpression(computedMaxStreak);
 
     const updateResult = await users.findOneAndUpdate(
-      { walletAddress },
+      { _id: existingUser._id },
       [
         {
           $set: {

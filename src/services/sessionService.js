@@ -6,8 +6,8 @@
 
 import { randomUUID } from 'node:crypto';
 import redis from '../lib/redis.js';
-import { users } from '../lib/mongo.js';
 import { sessionKey, SESSION_TTL_SEC } from '../lib/redisKeys.js';
+import { findCanonicalUserByWallet } from '../lib/userStore.js';
 import {
   deriveSessionKey,
   recordGameStart,
@@ -184,10 +184,10 @@ export async function endSession(walletAddress, options = {}) {
  * @returns {Promise<Object>} User stats
  */
 async function getUserStats(walletAddress) {
-  const userDoc = await users.findOne(
-    { walletAddress },
-    { projection: { correctAnswers: 1, currentStreak: 1 } }
-  );
+  const userDoc = await findCanonicalUserByWallet(walletAddress, {
+    projection: { correctAnswers: 1, currentStreak: 1 },
+    logLabel: 'sessionService.getUserStats'
+  });
 
   return {
     correctAnswers: userDoc?.correctAnswers ?? 0,

@@ -1,4 +1,41 @@
 import { users } from "./mongo.js";
+import { findCanonicalUserByWallet } from "./userStore.js";
+
+function buildCanonicalLeaderboardPipeline() {
+    return [
+        {
+            $sort: {
+                walletAddress: 1,
+                nameUpdated: -1,
+                correctAnswers: -1,
+                streak: -1,
+                currentStreak: -1,
+                updatedAt: -1,
+                lastUpdatedAt: -1,
+                createdAt: 1,
+                _id: 1
+            }
+        },
+        {
+            $group: {
+                _id: "$walletAddress",
+                doc: { $first: "$$ROOT" }
+            }
+        },
+        {
+            $replaceRoot: { newRoot: "$doc" }
+        },
+        {
+            $sort: {
+                correctAnswers: -1,
+                streak: -1,
+                currentStreak: -1,
+                updatedAt: -1,
+                _id: 1
+            }
+        }
+    ];
+}
 
 /**
  * Get all-time leaderboard with pagination
@@ -12,14 +49,17 @@ export async function topAllTime(limit = 10, page = 1, currentWallet = null) {
         // Calculate offset from page
         const offset = (page - 1) * limit;
 
-        // Get total count
-        const totalCount = await users.countDocuments({});
+        const totalCountResult = await users.aggregate([
+            ...buildCanonicalLeaderboardPipeline(),
+            { $count: "totalCount" }
+        ]).toArray();
+        const totalCount = totalCountResult[0]?.totalCount || 0;
 
         // Get paginated leaderboard
-        const leaderboard = await users.find(
-            {},
+        const leaderboard = await users.aggregate([
+            ...buildCanonicalLeaderboardPipeline(),
             {
-                projection: {
+                $project: {
                     walletAddress: 1,
                     username: 1,
                     correctAnswers: 1,
@@ -28,11 +68,10 @@ export async function topAllTime(limit = 10, page = 1, currentWallet = null) {
                     rank: 1,
                     dungeonTitle: 1
                 }
-            }
-        ).sort({ correctAnswers: -1, streak: -1, currentStreak: -1 })
-         .skip(offset)
-         .limit(limit)
-         .toArray();
+            },
+            { $skip: offset },
+            { $limit: limit }
+        ]).toArray();
 
         // Calculate total pages
         const totalPages = Math.ceil(totalCount / limit);
@@ -41,27 +80,33 @@ export async function topAllTime(limit = 10, page = 1, currentWallet = null) {
         let currentUserRank = null;
         if (currentWallet) {
             // Count how many users have more correct answers than the current user
-            const currentUser = await users.findOne(
-                { walletAddress: currentWallet.toLowerCase() },
-                { projection: { correctAnswers: 1, streak: 1, currentStreak: 1 } }
-            );
+            const currentUser = await findCanonicalUserByWallet(currentWallet, {
+                projection: { correctAnswers: 1, streak: 1, currentStreak: 1 },
+                logLabel: "leaderboard.topAllTime.currentUser"
+            });
 
             if (currentUser) {
-                const higherRanked = await users.countDocuments({
-                    $or: [
-                        { correctAnswers: { $gt: currentUser.correctAnswers } },
-                        {
-                            correctAnswers: currentUser.correctAnswers,
-                            streak: { $gt: currentUser.streak }
-                        },
-                        {
-                            correctAnswers: currentUser.correctAnswers,
-                            streak: currentUser.streak,
-                            currentStreak: { $gt: currentUser.currentStreak }
+                const higherRankedResult = await users.aggregate([
+                    ...buildCanonicalLeaderboardPipeline(),
+                    {
+                        $match: {
+                            $or: [
+                                { correctAnswers: { $gt: currentUser.correctAnswers } },
+                                {
+                                    correctAnswers: currentUser.correctAnswers,
+                                    streak: { $gt: currentUser.streak }
+                                },
+                                {
+                                    correctAnswers: currentUser.correctAnswers,
+                                    streak: currentUser.streak,
+                                    currentStreak: { $gt: currentUser.currentStreak }
+                                }
+                            ]
                         }
-                    ]
-                });
-                currentUserRank = higherRanked + 1;
+                    },
+                    { $count: "higherRanked" }
+                ]).toArray();
+                currentUserRank = (higherRankedResult[0]?.higherRanked || 0) + 1;
             }
         }
 

@@ -2,6 +2,7 @@
  * Crypto utilities for hashing and key derivation
  */
 
+import { randomBytes } from 'node:crypto';
 import { keccak256, toHex } from 'viem';
 
 /**
@@ -44,5 +45,5 @@ export function generateSessionId() {
  * @returns {string} Random username
  */
 export function generatePlayerUsername() {
-  return `Player_${Date.now()}`;
+  return `Player_${randomBytes(4).toString('hex')}`;
 }

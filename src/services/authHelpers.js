@@ -4,6 +4,8 @@
  * Max 150 lines
  */
 
+import { generatePlayerUsername } from "../utils/crypto.js";
+
 const DEBUG_V2_LOGIN = ["1", "true", "yes", "on"].includes(
   String(process.env.DEBUG_V2_LOGIN || "").toLowerCase()
 );
@@ -111,7 +113,7 @@ export const buildUserPayload = (doc, privyMetaData, normalizeWallet) => {
   const walletAddress = normalizeWallet(doc?.walletAddress);
   return {
     walletAddress,
-    username: doc?.username || `Player_${Date.now()}`,
+    username: doc?.username || generatePlayerUsername(),
     correctAnswers: Number(doc?.correctAnswers) || 0,
     currentStreak: Number(doc?.currentStreak) || 0,
     streak: Number(doc?.streak) || 0,

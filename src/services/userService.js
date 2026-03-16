@@ -13,10 +13,13 @@ import {
   readUserFromRedis
 } from '../lib/docCache.js';
 import {
+  findCanonicalUserByWallet,
+  createOrGetUserByWallet
+} from '../lib/userStore.js';
+import {
   getGateUserRedis,
   updateGateUsernameRedis
 } from './gate.js';
-import { generatePlayerUsername } from '../utils/crypto.js';
 
 /**
  * Login or register a user
@@ -30,11 +33,14 @@ export async function loginOrRegister(params) {
     privyMetaData && typeof privyMetaData === 'object'
   );
 
-  const existingUser = await users.findOne({ walletAddress });
+  const existingUser = await findCanonicalUserByWallet(walletAddress, {
+    logLabel: 'userService.loginOrRegister'
+  });
   const now = new Date();
 
   let username;
   let nameUpdated;
+  let userDoc;
 
   if (!existingUser) {
     // Create new user
@@ -45,17 +51,20 @@ export async function loginOrRegister(params) {
       now
     });
     username = result.username;
-    nameUpdated = false;
+    nameUpdated = result.userDoc?.nameUpdated ?? false;
+    userDoc = result.userDoc || null;
   } else {
     // Update existing user
     username = existingUser.username;
     nameUpdated = existingUser.nameUpdated ?? false;
-    await updateExistingUser({
-      walletAddress,
+    userDoc = await updateExistingUser({
       walletAddressOriginal,
       privyMetaData: shouldStorePrivyMetaData ? privyMetaData : null,
-      existingUser
+      existingUser,
+      now
     });
+    username = userDoc?.username || username;
+    nameUpdated = userDoc?.nameUpdated ?? nameUpdated;
   }
 
   // Record daily login
@@ -69,7 +78,7 @@ export async function loginOrRegister(params) {
   });
 
   // Ensure user is cached
-  await ensureUserCached({ walletAddress, existingUser, username, timestamp: now });
+  await ensureUserCached({ walletAddress, userDoc, username, timestamp: now });
 
   // Create gate wallet entry
   await ensureGateWallet(walletAddress, loginType);
@@ -84,36 +93,22 @@ export async function loginOrRegister(params) {
  */
 async function createNewUser(params) {
   const { walletAddress, walletAddressOriginal, privyMetaData, now } = params;
-
-  const username = generatePlayerUsername();
-
-  const setOnInsert = {
+  const result = await createOrGetUserByWallet({
     walletAddress,
     walletAddressOriginal,
-    correctAnswers: 0,
-    currentStreak: 0,
-    streak: 0,
-    rank: 'E',
-    dungeonTitle: 'Newbie',
-    createdAt: now,
-    username,
-    nameUpdated: false,
-    lastUpdatedAt: now,
-    lastFlushedAt: now,
-    ...(privyMetaData ? { privyMetaData } : {})
-  };
-
-  await users.updateOne(
-    { walletAddress },
-    { $setOnInsert: setOnInsert, $set: { updatedAt: now } },
-    { upsert: true }
-  );
+    privyMetaData,
+    now,
+    logLabel: 'userService.createNewUser'
+  });
+  const username = result.userDoc?.username;
 
   // Fire-and-forget onchain registration
-  recordUserRegistration({ walletAddress, username })
-    .catch(e => console.error('[UserService] onchain register error:', e));
+  if (result.created && username) {
+    recordUserRegistration({ walletAddress, username })
+      .catch(e => console.error('[UserService] onchain register error:', e));
+  }
 
-  return { username };
+  return { username, userDoc: result.userDoc };
 }
 
 /**
@@ -121,22 +116,40 @@ async function createNewUser(params) {
  * @param {Object} params - Update parameters
  */
 async function updateExistingUser(params) {
-  const { walletAddress, walletAddressOriginal, privyMetaData, existingUser } = params;
+  const { walletAddressOriginal, privyMetaData, existingUser, now } = params;
+  const updates = {};
 
-  if (privyMetaData) {
+  if (privyMetaData && typeof privyMetaData === 'object') {
     const existingMeta = existingUser.privyMetaData || {};
-    await users.updateOne(
-      { walletAddress, privyMetaData: { $exists: false } },
-      { $set: { privyMetaData: { ...existingMeta, ...privyMetaData } } }
-    );
+    const mergedMeta = { ...existingMeta };
+    let metaChanged = false;
+
+    for (const [key, value] of Object.entries(privyMetaData)) {
+      if (value !== undefined && value !== null && value !== '' && mergedMeta[key] == null) {
+        mergedMeta[key] = value;
+        metaChanged = true;
+      }
+    }
+
+    if (metaChanged) {
+      updates.privyMetaData = mergedMeta;
+    }
   }
 
-  if (!existingUser.walletAddressOriginal) {
-    await users.updateOne(
-      { walletAddress, walletAddressOriginal: { $exists: false } },
-      { $set: { walletAddressOriginal } }
-    );
+  if (!existingUser.walletAddressOriginal && walletAddressOriginal) {
+    updates.walletAddressOriginal = walletAddressOriginal;
   }
+
+  if (!Object.keys(updates).length) {
+    return existingUser;
+  }
+
+  await users.updateOne(
+    { _id: existingUser._id },
+    { $set: { ...updates, updatedAt: now } }
+  );
+
+  return { ...existingUser, ...updates, updatedAt: now };
 }
 
 /**
@@ -166,17 +179,17 @@ async function recordDailyLogin(walletAddress) {
  * @param {string} options.username - Username
  * @param {Date} options.timestamp - Current timestamp
  */
-async function ensureUserCached({ walletAddress, existingUser, username, timestamp }) {
+async function ensureUserCached({ walletAddress, userDoc, username, timestamp }) {
   const cached = await readUserFromRedis(walletAddress);
   if (cached) return;
 
-  const cacheDoc = existingUser
+  const cacheDoc = userDoc
     ? {
-        ...existingUser,
+        ...userDoc,
         walletAddress,
         username,
-        lastUpdatedAt: existingUser.lastUpdatedAt || timestamp,
-        lastFlushedAt: existingUser.lastFlushedAt || timestamp
+        lastUpdatedAt: userDoc.lastUpdatedAt || timestamp,
+        lastFlushedAt: userDoc.lastFlushedAt || timestamp
       }
     : {
         walletAddress,
@@ -218,6 +231,26 @@ async function ensureGateWallet(walletAddress, loginType) {
 export async function updateUsername(walletAddress, newUsername) {
   const now = new Date();
   const nowIso = now.toISOString();
+  const existingUser = await findCanonicalUserByWallet(walletAddress, {
+    projection: {
+      _id: 1,
+      walletAddress: 1,
+      username: 1,
+      correctAnswers: 1,
+      currentStreak: 1,
+      streak: 1,
+      rank: 1,
+      dungeonTitle: 1,
+      lastUpdatedAt: 1,
+      lastFlushedAt: 1,
+      nameUpdated: 1
+    },
+    logLabel: 'userService.updateUsername'
+  });
+
+  if (!existingUser) {
+    return null;
+  }
 
   const updates = {
     username: newUsername,
@@ -228,7 +261,7 @@ export async function updateUsername(walletAddress, newUsername) {
   };
 
   const result = await users.updateOne(
-    { walletAddress },
+    { _id: existingUser._id },
     { $set: updates }
   );
 
@@ -241,7 +274,7 @@ export async function updateUsername(walletAddress, newUsername) {
 
   // Update gate user if exists
   const cachedGateUser = await getGateUserRedis(walletAddress);
-  if (cachedGateUser) {
+  if (cachedGateUser && responseUser) {
     await updateGateUsernameRedis(walletAddress, newUsername);
     responseUser.campaign = await getGateUserRedis(walletAddress);
   }
@@ -270,22 +303,20 @@ async function updateUserCache(walletAddress, updates, nowIso) {
   }
 
   // Fetch from DB if not cached
-  const updatedUser = await users.findOne(
-    { walletAddress },
-    {
-      projection: {
-        walletAddress: 1,
-        username: 1,
-        correctAnswers: 1,
-        currentStreak: 1,
-        streak: 1,
-        rank: 1,
-        dungeonTitle: 1,
-        lastUpdatedAt: 1,
-        lastFlushedAt: 1
-      }
-    }
-  );
+  const updatedUser = await findCanonicalUserByWallet(walletAddress, {
+    projection: {
+      walletAddress: 1,
+      username: 1,
+      correctAnswers: 1,
+      currentStreak: 1,
+      streak: 1,
+      rank: 1,
+      dungeonTitle: 1,
+      lastUpdatedAt: 1,
+      lastFlushedAt: 1
+    },
+    logLabel: 'userService.updateUserCache'
+  });
 
   if (!updatedUser) return null;
 

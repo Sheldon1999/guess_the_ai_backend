@@ -25,6 +25,7 @@ export const userActiveDaily = db.collection("guesstheai_user_active_daily");
 // Indexes (idempotent)
 await images.createIndex({ hash: 1 }, { unique: true });
 await gateWallets.createIndex({ walletAddress: 1 }, { unique: true });
+await users.createIndex({ walletAddress: 1 });
 await users.createIndex({ username: 1 }, { unique: true, collation: { locale: "en", strength: 2 } });
 await users.createIndex({ correctAnswers: -1 });
 await dailyLogins.createIndex({ walletAddress: 1, day: 1 }, { unique: true });

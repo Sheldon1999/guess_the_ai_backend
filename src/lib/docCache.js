@@ -1,8 +1,10 @@
 import redis from "./redis.js";
 import { users, images } from "./mongo.js";
+import { findCanonicalUserByWallet, findUserDocsByWallet } from "./userStore.js";
 import { rankFromCorrect, titleFromStreak } from "./rank.js";
 import { DIRTY_USERS_KEY, docImageKey, docUserKey } from "./redisKeys.js";
 import { flushGateUsers } from "../services/gate.js";
+import { generatePlayerUsername } from "../utils/crypto.js";
 import {
   normalizeWallet as normalizeWalletUtil,
   normalizeHash as normalizeHashUtil
@@ -42,7 +44,7 @@ function materializeUserDoc(doc) {
 
   return {
     walletAddress,
-    username: doc.username || `Player_${Date.now()}`,
+    username: doc.username || generatePlayerUsername(),
     correctAnswers,
     currentStreak,
     streak,
@@ -82,8 +84,8 @@ export async function fetchUserProfile(wallet) {
   const cached = await readUserFromRedis(normWallet);
   if (cached) return cached;
 
-  const doc = await users.findOne(
-    { walletAddress: normWallet },
+  const doc = await findCanonicalUserByWallet(
+    normWallet,
     {
       projection: {
         walletAddress: 1,
@@ -97,6 +99,7 @@ export async function fetchUserProfile(wallet) {
         lastFlushedAt: 1,
         updatedAt: 1,
       },
+      logLabel: "docCache.fetchUserProfile",
     }
   );
   if (!doc) return null;
@@ -184,10 +187,21 @@ export async function flushDirtyUsers(limit = REDIS_FLUSH_BATCH) {
       lastFlushedAt: nowIso(),
       updatedAt: new Date(snapshot.lastUpdatedAt || nowIso()),
     };
+    const matches = await findUserDocsByWallet(snapshot.walletAddress, {
+      projection: { _id: 1, walletAddress: 1, username: 1 },
+      limit: 2,
+      logLabel: "docCache.flushDirtyUsers",
+    });
+    if (matches.length !== 1) {
+      console.error("[docCache] flush skipped: ambiguous wallet", {
+        walletAddress: snapshot.walletAddress,
+        matchCount: matches.length,
+      });
+      continue;
+    }
     await users.updateOne(
-      { walletAddress: snapshot.walletAddress },
-      { $set: payload },
-      { upsert: true }
+      { _id: matches[0]._id },
+      { $set: payload }
     );
     snapshot.lastFlushedAt = payload.lastFlushedAt;
     await redis.set(key, JSON.stringify(snapshot));

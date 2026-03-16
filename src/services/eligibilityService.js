@@ -5,6 +5,7 @@
  */
 
 import { gateWallets, users } from '../lib/mongo.js';
+import { findCanonicalUserByWallet } from '../lib/userStore.js';
 import { getGateUserRedis } from './gate.js';
 
 /**
@@ -93,10 +94,10 @@ export async function checkGalaxyEligibility(normalizedAddress) {
  * @returns {Promise<boolean>} Eligibility status
  */
 export async function checkGalaxyUserEligibility(walletAddress) {
-  const existingUser = await users.findOne(
-    { walletAddress },
-    { projection: { _id: 1 } }
-  );
+  const existingUser = await findCanonicalUserByWallet(walletAddress, {
+    projection: { _id: 1 },
+    logLabel: 'eligibilityService.checkGalaxyUserEligibility'
+  });
 
   if (!existingUser) return false;
 
