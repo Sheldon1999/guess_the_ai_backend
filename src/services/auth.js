@@ -243,19 +243,21 @@ async function ensureGateWalletUser(context, walletAddress, username, walletType
   const isGateUser = context.request?.sessionWallet === "VERIFIED" || context.incomingMeta?.type === "gate_wallet";
   gateAuthLog("ensureGateWalletUser start", { walletAddress, sessionWallet: context.request?.sessionWallet, incomingType: context.incomingMeta?.type, isGateUser });
 
-  const isGateUserExisted = await gateWallets.findOne({ walletAddress });
-  if (!isGateUserExisted) {
-    gateAuthLog("ensureGateWalletUser inserting gateWallets doc", { walletAddress });
-    await gateWallets.insertOne({ walletAddress, hasAwarded: false, privyMetaData: context.incomingMeta });
-  }
+  // Use upsert to prevent race condition between findOne + insertOne
+  const upsertResult = await gateWallets.updateOne(
+    { walletAddress },
+    { $setOnInsert: { walletAddress, hasAwarded: false, privyMetaData: context.incomingMeta } },
+    { upsert: true }
+  );
+  const docAlreadyExisted = upsertResult.upsertedCount === 0;
 
   const cachedGateUser = await getGateUserRedis(walletAddress);
   if (!cachedGateUser && username && walletType) {
     await createGateUserRedis(walletAddress, username, walletType);
   }
 
-  gateAuthLog("ensureGateWalletUser complete", { walletAddress, gateDocExists: Boolean(isGateUserExisted), isGateUser });
-  return isGateUser || Boolean(isGateUserExisted);
+  gateAuthLog("ensureGateWalletUser complete", { walletAddress, gateDocExists: docAlreadyExisted, isGateUser });
+  return isGateUser || docAlreadyExisted;
 }
 
 /**
@@ -320,8 +322,20 @@ async function handleNewUserCreation(context) {
     ...(Object.keys(privyMetaToStore).length ? { privyMetaData: privyMetaToStore } : {})
   };
 
-  const result = await users.updateOne({ walletAddress: walletToCreate }, { $setOnInsert: setOnInsert, $set: { updatedAt: context.now } }, { upsert: true });
-  const createdDoc = result?.upsertedCount > 0 ? setOnInsert : await users.findOne({ walletAddress: walletToCreate });
+  let createdDoc;
+  try {
+    const result = await users.updateOne({ walletAddress: walletToCreate }, { $setOnInsert: setOnInsert, $set: { updatedAt: context.now } }, { upsert: true });
+    createdDoc = result?.upsertedCount > 0 ? setOnInsert : await users.findOne({ walletAddress: walletToCreate });
+  } catch (err) {
+    // Duplicate key on walletAddress unique index — a concurrent request already created this user.
+    // Fetch the existing doc and log them in instead of erroring.
+    if (err?.code === 11000) {
+      logV2("info", "duplicate_key_prevented", { walletAddress: maskValue(walletToCreate) });
+      const existingDoc = await users.findOne({ walletAddress: walletToCreate });
+      if (existingDoc) return await handleExistingUserLogin(context, existingDoc, "duplicate_prevented");
+    }
+    throw err;
+  }
 
   if (context.externalWalletAddress && isAddress(context.externalWalletAddress)) {
     recordUserRegistration({ walletAddress: context.externalWalletAddress, username }).catch((e) => console.error("onchain register error:", e));
@@ -332,28 +346,13 @@ async function handleNewUserCreation(context) {
   const token = await generateAuthToken({ _id: walletToCreate, wallet: walletToCreate, username });
   await writeUserToRedis({ ...(createdDoc || setOnInsert), walletAddress: walletToCreate, username, lastUpdatedAt: context.now, lastFlushedAt: context.now });
 
+  // ensureGateWalletUser handles gate wallet doc creation + Redis cache atomically
   const isGateUser = await ensureGateWalletUser(context, walletToCreate, username, walletType);
   gateAuthLog("login gate status", { wallet: walletToCreate, isGateUser, hasGateMeta: Boolean(context.incomingMeta?.type === "gate_wallet"), sessionWallet: context.request?.sessionWallet });
 
   const responseUser = buildUserPayload({ ...(createdDoc || setOnInsert), walletAddress: walletToCreate, username }, privyMetaToStore, normalizeWallet);
 
   logV2("info", "success", { walletAddress: maskValue(walletToCreate), foundBy: context.externalWalletAddress ? "created_wallet" : "created_embedded", hasGateUser: isGateUser, nameUpdated: false });
-
-  // Galaxy rewards eligibility
-  const isGalaxyUserEligible = await gateWallets.findOne({ walletAddress: walletToCreate });
-  if (!isGalaxyUserEligible) {
-    gateAuthLog("login inserting gateWallets doc", { wallet: walletToCreate });
-    await gateWallets.insertOne({
-      walletAddress: walletToCreate,
-      hasAwarded: false,
-      privyMetaData: privyMetaToStore
-    });
-  }
-  gateAuthLog("login creating gate redis entry", { wallet: walletToCreate, username, walletType });
-  const cachedGateUser = await getGateUserRedis(walletToCreate);
-  if (!cachedGateUser) {
-    await createGateUserRedis(walletToCreate, username, walletType);
-  }
 
   return { token, username, nameUpdated: false, user: responseUser, foundBy: context.externalWalletAddress ? "created_wallet" : "created_embedded" };
 }
