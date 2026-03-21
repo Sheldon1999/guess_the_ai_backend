@@ -130,6 +130,51 @@ async function updateGateStats(walletAddress, response) {
 }
 
 /**
+ * Record a new game mode answer to blockchain (exported, fire-and-forget)
+ * Called by gameModeService for cardflip, rapidfire, duel, oddoneout, multiselect.
+ * @param {string} walletAddress - User wallet
+ * @param {Object} params - { primaryHash, answer, isCorrect, profile }
+ */
+export async function recordModeAnswerOnchain(walletAddress, { primaryHash, answer, isCorrect, profile }) {
+  try {
+    const session = await loadSession(walletAddress);
+    const sessionKey = session?.sessionKey;
+    if (!sessionKey) return;
+
+    const questionId = toQuestionId(primaryHash);
+
+    const submission = await recordAnswerSubmissionHash({
+      walletAddress,
+      sessionKey,
+      questionId,
+      answer,
+      isCorrect
+    });
+
+    if (submission?.error) {
+      console.error('[AnswerService] onchain submission error:', submission.error);
+    }
+
+    if (isCorrect && profile?.correctAnswers != null) {
+      recordSeasonScore({
+        walletAddress,
+        totalCorrect: profile.correctAnswers
+      })
+        .then(result => {
+          if (result?.error) {
+            console.error('[AnswerService] onchain leaderboard error:', result.error);
+          }
+        })
+        .catch(error => {
+          console.error('[AnswerService] onchain leaderboard exception:', error);
+        });
+    }
+  } catch {
+    // Session not found or onchain failure — non-blocking
+  }
+}
+
+/**
  * Record answer to blockchain (fire-and-forget)
  * @param {string} walletAddress - User wallet
  * @param {Object} response - Answer response
