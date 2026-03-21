@@ -10,6 +10,7 @@ import {
 } from '../lib/redisKeys.js';
 import { normalizeGuess, normalizeHash } from '../utils/normalize.js';
 import * as answerService from './answerService.js';
+import { recordModeAnswerOnchain } from './answerService.js';
 import { getRandomTemplate, supportedGameModes } from './gameQuestionConfigService.js';
 
 const LABEL_TOPUP_BATCH = Math.max(Number(process.env.GAME_LABEL_POOL_TOPUP || 2000), 100);
@@ -500,6 +501,8 @@ export async function answerMultiSelect(walletAddress, payload = {}) {
     isCorrectRound: isPerfectRound
   });
 
+  recordModeAnswerOnchain(walletAddress, { primaryHash: hashes[0], answer: askingFor, isCorrect: isPerfectRound, profile }).catch(() => {});
+
   return buildModeAnswer('multiselect', results, buildScore(delta, correctCount, wrongCount), profile, {
     askingFor
   });
@@ -537,6 +540,8 @@ export async function answerDuel(walletAddress, payload = {}) {
     delta,
     isCorrectRound: isCorrect
   });
+
+  recordModeAnswerOnchain(walletAddress, { primaryHash: selectedHash, answer: selectedHash, isCorrect, profile }).catch(() => {});
 
   return buildModeAnswer('duel', results, buildScore(delta, isCorrect ? 1 : 0, isCorrect ? 0 : 1), profile, {
     askingFor,
@@ -581,6 +586,8 @@ export async function answerOddOneOut(walletAddress, payload = {}) {
     isCorrectRound: isCorrect
   });
 
+  recordModeAnswerOnchain(walletAddress, { primaryHash: selectedHash, answer: selectedHash, isCorrect, profile }).catch(() => {});
+
   return buildModeAnswer('oddoneout', results, buildScore(delta, isCorrect ? 1 : 0, isCorrect ? 0 : 1), profile, {
     askingFor,
     oddHash,
@@ -608,6 +615,8 @@ export async function answerCardFlip(walletAddress, payload = {}) {
     isCorrectRound: isCorrect
   });
 
+  recordModeAnswerOnchain(walletAddress, { primaryHash: hash, answer: truth || guess, isCorrect, profile }).catch(() => {});
+
   return buildModeAnswer('cardflip', [{ hash, guess, truth, isCorrect }], buildScore(isCorrect ? 1 : 0, isCorrect ? 1 : 0, isCorrect ? 0 : 1), profile);
 }
 
@@ -634,6 +643,8 @@ export async function answerRapidFire(walletAddress, payload = {}) {
     delta,
     isCorrectRound: isCorrect
   });
+
+  recordModeAnswerOnchain(walletAddress, { primaryHash: hash, answer: truth || guess, isCorrect, profile }).catch(() => {});
 
   return buildModeAnswer('rapidfire', [{ hash, guess, truth, isCorrect }], buildScore(delta, isCorrect ? 1 : 0, isCorrect ? 0 : 1), profile, {
     comboUsed: safeCombo
