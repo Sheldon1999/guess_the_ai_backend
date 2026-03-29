@@ -161,38 +161,42 @@ export async function flushDirtyUsers(limit = REDIS_FLUSH_BATCH) {
   const batch = members.slice(0, limit);
   let flushed = 0;
   for (const wallet of batch) {
-    const key = userKey(wallet);
-    const snapshot = safeParse(await redis.get(key));
-    if (!snapshot) {
+    try {
+      const key = userKey(wallet);
+      const snapshot = safeParse(await redis.get(key));
+      if (!snapshot) {
+          await redis.srem(DIRTY_USERS_KEY, wallet);
+        continue;
+      }
+      const updatedAt = snapshot.lastUpdatedAt ? new Date(snapshot.lastUpdatedAt) : null;
+      const flushedAt = snapshot.lastFlushedAt ? new Date(snapshot.lastFlushedAt) : null;
+      if (updatedAt && flushedAt && flushedAt >= updatedAt) {
+        await redis.srem(DIRTY_USERS_KEY, wallet);
+        continue;
+      }
+      const payload = {
+        username: snapshot.username,
+        correctAnswers: snapshot.correctAnswers,
+        currentStreak: snapshot.currentStreak,
+        streak: snapshot.streak,
+        rank: snapshot.rank,
+        dungeonTitle: snapshot.dungeonTitle,
+        lastUpdatedAt: snapshot.lastUpdatedAt,
+        lastFlushedAt: nowIso(),
+        updatedAt: new Date(snapshot.lastUpdatedAt || nowIso()),
+      };
+      await users.updateOne(
+        { walletAddress: snapshot.walletAddress },
+        { $set: payload },
+        { upsert: true }
+      );
+      snapshot.lastFlushedAt = payload.lastFlushedAt;
+      await redis.set(key, JSON.stringify(snapshot));
       await redis.srem(DIRTY_USERS_KEY, wallet);
-      continue;
+      flushed += 1;
+    } catch (err) {
+      console.error(`[flushDirtyUsers] failed for wallet ${wallet}:`, err.message);
     }
-    const updatedAt = snapshot.lastUpdatedAt ? new Date(snapshot.lastUpdatedAt) : null;
-    const flushedAt = snapshot.lastFlushedAt ? new Date(snapshot.lastFlushedAt) : null;
-    if (updatedAt && flushedAt && flushedAt >= updatedAt) {
-      await redis.srem(DIRTY_USERS_KEY, wallet);
-      continue;
-    }
-    const payload = {
-      username: snapshot.username,
-      correctAnswers: snapshot.correctAnswers,
-      currentStreak: snapshot.currentStreak,
-      streak: snapshot.streak,
-      rank: snapshot.rank,
-      dungeonTitle: snapshot.dungeonTitle,
-      lastUpdatedAt: snapshot.lastUpdatedAt,
-      lastFlushedAt: nowIso(),
-      updatedAt: new Date(snapshot.lastUpdatedAt || nowIso()),
-    };
-    await users.updateOne(
-      { walletAddress: snapshot.walletAddress },
-      { $set: payload },
-      { upsert: true }
-    );
-    snapshot.lastFlushedAt = payload.lastFlushedAt;
-    await redis.set(key, JSON.stringify(snapshot));
-    await redis.srem(DIRTY_USERS_KEY, wallet);
-    flushed += 1;
   }
   return { flushed };
 }
