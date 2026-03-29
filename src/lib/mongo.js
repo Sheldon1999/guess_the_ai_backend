@@ -25,6 +25,8 @@ export const userActiveDaily = db.collection("guesstheai_user_active_daily");
 // Indexes (idempotent)
 await images.createIndex({ hash: 1 }, { unique: true });
 await gateWallets.createIndex({ walletAddress: 1 }, { unique: true });
+// Drop the old non-unique walletAddress index if it exists, then recreate as unique
+await users.dropIndex("walletAddress_1").catch(() => {/* already gone or doesn't exist */});
 await users.createIndex({ walletAddress: 1 }, { unique: true });
 await users.createIndex({ username: 1 }, { unique: true, collation: { locale: "en", strength: 2 } });
 await users.createIndex({ correctAnswers: -1 });
