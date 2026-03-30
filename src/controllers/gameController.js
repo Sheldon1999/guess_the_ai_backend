@@ -7,6 +7,7 @@ import * as gameService from '../services/gameService.js';
 import * as answerService from '../services/answerService.js';
 import * as eligibilityService from '../services/eligibilityService.js';
 import * as gameModeService from '../services/gameModeService.js';
+import * as hintService from '../services/hintService.js';
 import {
   sendSuccess,
   sendError,
@@ -64,6 +65,15 @@ export async function getNext10ImagesHandler(req, res) {
 
     if (result.status === 204) {
       return res.status(204).send();
+    }
+
+    // Fire-and-forget: generate hints for all images in this batch
+    const imageList = result.body?.image_list;
+    if (Array.isArray(imageList) && imageList.length > 0) {
+      const hashes = imageList.map((img) => img.hash).filter(Boolean);
+      if (hashes.length > 0) {
+        hintService.fireHintGenerationBatch(hashes).catch(() => {});
+      }
     }
 
     return res.json(result.body);
@@ -303,6 +313,25 @@ export async function submitRapidFireAnswerHandler(req, res) {
       return sendValidationError(res, error.message);
     }
     return sendServerError(res, error, 'GameController.submitRapidFireAnswer');
+  }
+}
+
+/**
+ * Poll for round hint
+ * GET /api/game/hint/:roundId
+ */
+export async function getHintHandler(req, res) {
+  try {
+    const roundId = req.params?.roundId;
+
+    if (!roundId) {
+      return sendValidationError(res, 'roundId is required');
+    }
+
+    const result = await hintService.getHintForRound(roundId);
+    return sendSuccess(res, result);
+  } catch (error) {
+    return sendServerError(res, error, 'GameController.getHint');
   }
 }
 
