@@ -501,10 +501,16 @@ export async function answerMultiSelect(walletAddress, payload = {}) {
     isCorrectRound: isPerfectRound
   });
 
-  recordModeAnswerOnchain(walletAddress, { primaryHash: hashes[0], answer: askingFor, isCorrect: isPerfectRound, profile }).catch(() => {});
+  const onchain = await recordModeAnswerOnchain(walletAddress, {
+    primaryHash: hashes[0],
+    answer: askingFor,
+    isCorrect: isPerfectRound,
+    profile
+  }).catch(() => null);
 
   return buildModeAnswer('multiselect', results, buildScore(delta, correctCount, wrongCount), profile, {
-    askingFor
+    askingFor,
+    ...(onchain?.transactionHash ? { onchain } : {})
   });
 }
 
@@ -541,12 +547,18 @@ export async function answerDuel(walletAddress, payload = {}) {
     isCorrectRound: isCorrect
   });
 
-  recordModeAnswerOnchain(walletAddress, { primaryHash: selectedHash, answer: selectedHash, isCorrect, profile }).catch(() => {});
+  const onchain = await recordModeAnswerOnchain(walletAddress, {
+    primaryHash: selectedHash,
+    answer: selectedHash,
+    isCorrect,
+    profile
+  }).catch(() => null);
 
   return buildModeAnswer('duel', results, buildScore(delta, isCorrect ? 1 : 0, isCorrect ? 0 : 1), profile, {
     askingFor,
     variant,
-    selectedHash
+    selectedHash,
+    ...(onchain?.transactionHash ? { onchain } : {})
   });
 }
 
@@ -586,12 +598,18 @@ export async function answerOddOneOut(walletAddress, payload = {}) {
     isCorrectRound: isCorrect
   });
 
-  recordModeAnswerOnchain(walletAddress, { primaryHash: selectedHash, answer: selectedHash, isCorrect, profile }).catch(() => {});
+  const onchain = await recordModeAnswerOnchain(walletAddress, {
+    primaryHash: selectedHash,
+    answer: selectedHash,
+    isCorrect,
+    profile
+  }).catch(() => null);
 
   return buildModeAnswer('oddoneout', results, buildScore(delta, isCorrect ? 1 : 0, isCorrect ? 0 : 1), profile, {
     askingFor,
     oddHash,
-    selectedHash
+    selectedHash,
+    ...(onchain?.transactionHash ? { onchain } : {})
   });
 }
 
@@ -615,9 +633,16 @@ export async function answerCardFlip(walletAddress, payload = {}) {
     isCorrectRound: isCorrect
   });
 
-  recordModeAnswerOnchain(walletAddress, { primaryHash: hash, answer: truth || guess, isCorrect, profile }).catch(() => {});
+  const onchain = await recordModeAnswerOnchain(walletAddress, {
+    primaryHash: hash,
+    answer: truth || guess,
+    isCorrect,
+    profile
+  }).catch(() => null);
 
-  return buildModeAnswer('cardflip', [{ hash, guess, truth, isCorrect }], buildScore(isCorrect ? 1 : 0, isCorrect ? 1 : 0, isCorrect ? 0 : 1), profile);
+  return buildModeAnswer('cardflip', [{ hash, guess, truth, isCorrect }], buildScore(isCorrect ? 1 : 0, isCorrect ? 1 : 0, isCorrect ? 0 : 1), profile, {
+    ...(onchain?.transactionHash ? { onchain } : {})
+  });
 }
 
 export async function answerRapidFire(walletAddress, payload = {}) {
@@ -644,9 +669,15 @@ export async function answerRapidFire(walletAddress, payload = {}) {
     isCorrectRound: isCorrect
   });
 
-  recordModeAnswerOnchain(walletAddress, { primaryHash: hash, answer: truth || guess, isCorrect, profile }).catch(() => {});
+  const onchain = await recordModeAnswerOnchain(walletAddress, {
+    primaryHash: hash,
+    answer: truth || guess,
+    isCorrect,
+    profile
+  }).catch(() => null);
 
   return buildModeAnswer('rapidfire', [{ hash, guess, truth, isCorrect }], buildScore(delta, isCorrect ? 1 : 0, isCorrect ? 0 : 1), profile, {
-    comboUsed: safeCombo
+    comboUsed: safeCombo,
+    ...(onchain?.transactionHash ? { onchain } : {})
   });
 }
