@@ -20,6 +20,7 @@ import {
   submitCardFlipAnswerHandler,
   getRapidFireQuestionHandler,
   submitRapidFireAnswerHandler,
+  getHintHandler,
   isGateUserEligibleHandler,
   checkGateEligibilityHandler,
   awardGateUserHandler,
@@ -60,6 +61,9 @@ export default function gameRoutes(app) {
   // Rapid-fire mode APIs
   app.get('/api/game/rapidfire/question', protect, getRapidFireQuestionHandler);
   app.post('/api/game/rapidfire/answer', protect, submitRapidFireAnswerHandler);
+
+  // Hint polling
+  app.get('/api/game/hint/:roundId', protect, getHintHandler);
 
   // Check gate user eligibility (authenticated)
   app.get('/api/game/isGateUserEligible', protect, isGateUserEligibleHandler);
