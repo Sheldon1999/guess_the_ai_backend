@@ -358,7 +358,7 @@ export async function getModeQuestion(mode, variant = null) {
 
   // Fire-and-forget hint for modes with ≤2 images (classic uses its own path)
   if (normalizedMode === 'duel' || normalizedMode === 'rapidfire') {
-    fireHintGeneration(roundId, allHashes, normalizedMode).catch(() => {});
+    fireHintGeneration(roundId, allHashes, normalizedMode).catch(() => { });
   }
 
   return response;
@@ -513,7 +513,7 @@ export async function answerMultiSelect(walletAddress, payload = {}) {
     isCorrectRound: isPerfectRound
   });
 
-  recordModeAnswerOnchain(walletAddress, { primaryHash: hashes[0], answer: askingFor, isCorrect: isPerfectRound, profile }).catch(() => {});
+  recordModeAnswerOnchain(walletAddress, { primaryHash: hashes[0], answer: askingFor, isCorrect: isPerfectRound, profile }).catch(() => { });
 
   return buildModeAnswer('multiselect', results, buildScore(delta, correctCount, wrongCount), profile, {
     askingFor
@@ -553,7 +553,7 @@ export async function answerDuel(walletAddress, payload = {}) {
     isCorrectRound: isCorrect
   });
 
-  recordModeAnswerOnchain(walletAddress, { primaryHash: selectedHash, answer: selectedHash, isCorrect, profile }).catch(() => {});
+  recordModeAnswerOnchain(walletAddress, { primaryHash: selectedHash, answer: selectedHash, isCorrect, profile }).catch(() => { });
 
   return buildModeAnswer('duel', results, buildScore(delta, isCorrect ? 1 : 0, isCorrect ? 0 : 1), profile, {
     askingFor,
@@ -598,7 +598,7 @@ export async function answerOddOneOut(walletAddress, payload = {}) {
     isCorrectRound: isCorrect
   });
 
-  recordModeAnswerOnchain(walletAddress, { primaryHash: selectedHash, answer: selectedHash, isCorrect, profile }).catch(() => {});
+  recordModeAnswerOnchain(walletAddress, { primaryHash: selectedHash, answer: selectedHash, isCorrect, profile }).catch(() => { });
 
   return buildModeAnswer('oddoneout', results, buildScore(delta, isCorrect ? 1 : 0, isCorrect ? 0 : 1), profile, {
     askingFor,
@@ -627,7 +627,7 @@ export async function answerCardFlip(walletAddress, payload = {}) {
     isCorrectRound: isCorrect
   });
 
-  recordModeAnswerOnchain(walletAddress, { primaryHash: hash, answer: truth || guess, isCorrect, profile }).catch(() => {});
+  recordModeAnswerOnchain(walletAddress, { primaryHash: hash, answer: truth || guess, isCorrect, profile }).catch(() => { });
 
   return buildModeAnswer('cardflip', [{ hash, guess, truth, isCorrect }], buildScore(isCorrect ? 1 : 0, isCorrect ? 1 : 0, isCorrect ? 0 : 1), profile);
 }
@@ -656,7 +656,7 @@ export async function answerRapidFire(walletAddress, payload = {}) {
     isCorrectRound: isCorrect
   });
 
-  recordModeAnswerOnchain(walletAddress, { primaryHash: hash, answer: truth || guess, isCorrect, profile }).catch(() => {});
+  recordModeAnswerOnchain(walletAddress, { primaryHash: hash, answer: truth || guess, isCorrect, profile }).catch(() => { });
 
   return buildModeAnswer('rapidfire', [{ hash, guess, truth, isCorrect }], buildScore(delta, isCorrect ? 1 : 0, isCorrect ? 0 : 1), profile, {
     comboUsed: safeCombo
