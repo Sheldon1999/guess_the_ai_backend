@@ -356,8 +356,10 @@ export async function getModeQuestion(mode, variant = null) {
   const roundId = crypto.randomUUID();
   const response = buildQuestionResponse(normalizedMode, template, allHashes, roundId);
 
-  // Fire-and-forget — no await, doesn't block the question response
-  fireHintGeneration(roundId, allHashes, normalizedMode).catch(() => {});
+  // Fire-and-forget hint for modes with ≤2 images (classic uses its own path)
+  if (normalizedMode === 'duel' || normalizedMode === 'rapidfire') {
+    fireHintGeneration(roundId, allHashes, normalizedMode).catch(() => {});
+  }
 
   return response;
 }

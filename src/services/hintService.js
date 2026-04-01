@@ -1,8 +1,9 @@
 /**
  * Hint Service
  *
- * Generates 1-2 line gameplay hints per round using 0G inference,
+ * Generates 1-2 line gameplay hints per round using Cloudflare Workers AI,
  * then stores them in Redis for polling by the frontend.
+ * Also fires a blind ping to 0G inference to keep their usage metrics alive.
  *
  * Exports:
  *   fireHintGeneration(roundId, hashes, mode)  – fire-and-forget
@@ -12,7 +13,8 @@
 import redis from '../lib/redis.js';
 import { images } from '../lib/mongo.js';
 import { hintRoundKey, HINT_ROUND_TTL_SEC } from '../lib/redisKeys.js';
-import { chatCompletion, isConfigured } from '../lib/zgInference.js';
+import { chatCompletion, isConfigured } from '../lib/cfInference.js';
+import { fireBlindPing } from '../lib/zgInference.js';
 import { normalizeHash } from '../utils/normalize.js';
 
 const MODE_LABELS = {
@@ -93,7 +95,7 @@ async function fetchDescriptions(hashes) {
  */
 export async function fireHintGeneration(roundId, hashes, mode) {
   if (!isConfigured()) {
-    console.warn('[hintService] 0G not configured, skipping hint generation');
+    console.warn('[hintService] Cloudflare AI not configured, skipping hint generation');
     return;
   }
 
@@ -116,19 +118,24 @@ export async function fireHintGeneration(roundId, hashes, mode) {
       return;
     }
 
-    // 2. Build prompt and call 0G
+    // 2. Build prompt and call Cloudflare AI
     const userPrompt = buildUserPrompt(descriptions, mode);
 
+    const messages = [
+      { role: 'system', content: SYSTEM_PROMPT },
+      { role: 'user', content: userPrompt },
+    ];
+
+    // Blind ping 0G — fire-and-forget, result discarded
+    fireBlindPing(messages);
+
     const hint = await chatCompletion(
-      [
-        { role: 'system', content: SYSTEM_PROMPT },
-        { role: 'user', content: userPrompt },
-      ],
+      messages,
       { temperature: 0.5, maxTokens: 80, timeoutMs: 30_000 }
     );
 
     if (!hint) {
-      console.warn(`[hintService] 0G returned empty hint for round ${roundId}`);
+      console.warn(`[hintService] Cloudflare returned empty hint for round ${roundId}`);
       return;
     }
 
@@ -181,17 +188,22 @@ async function generateSingleImageHint(desc) {
   const truncated = text.length > 600 ? text.slice(0, 600) + '…' : text;
 
   try {
+    const messages = [
+      { role: 'system', content: SYSTEM_PROMPT },
+      {
+        role: 'user',
+        content:
+          `Game mode: Classic (single image — is it AI or human?)\n` +
+          `Image description: "${truncated}"\n\n` +
+          `Write one short hint for this image.`,
+      },
+    ];
+
+    // Blind ping 0G — fire-and-forget, result discarded
+    fireBlindPing(messages);
+
     const hint = await chatCompletion(
-      [
-        { role: 'system', content: SYSTEM_PROMPT },
-        {
-          role: 'user',
-          content:
-            `Game mode: Classic (single image — is it AI or human?)\n` +
-            `Image description: "${truncated}"\n\n` +
-            `Write one short hint for this image.`,
-        },
-      ],
+      messages,
       { temperature: 0.5, maxTokens: 80, timeoutMs: 30_000 }
     );
 
