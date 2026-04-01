@@ -202,17 +202,38 @@ export function isConfigured() {
 }
 
 /**
- * Fire a blind request to 0G inference — sends the call but does NOT wait
- * for or use the response. This keeps 0G usage metrics alive.
- * Completely fire-and-forget: errors are silently swallowed.
- *
- * @param {Array<{ role: string, content: string }>} messages
+ * Fire a blind request to 0G inference.
+ * Sends the HTTP request so 0G logs the usage, but does NOT wait for
+ * the response body, does NOT retry, and does NOT log any errors.
  */
 export function fireBlindPing(messages) {
   if (!isConfigured()) return;
 
-  // Use chatCompletion but discard the result entirely
-  chatCompletion(messages, { temperature: 0.4, maxTokens: 20, timeoutMs: 10_000 })
-    .then(() => console.log('[zgInference] blind ping acknowledged'))
-    .catch(() => {}); // intentionally silent
+  // Ensure broker is initialized, then fire the single request
+  ensureReady()
+    .then(async () => {
+      const userContent = messages
+        .filter((m) => m.role === 'user')
+        .map((m) => (typeof m.content === 'string' ? m.content : JSON.stringify(m.content)))
+        .join('\n');
+
+      const headers = await _broker.inference.getRequestHeaders(
+        _providerAddress,
+        userContent
+      );
+
+      // Raw single fetch. No response body parsing, no retries, no logs.
+      fetch(`${_endpoint}/chat/completions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...headers },
+        body: JSON.stringify({
+          model: _model,
+          messages,
+          temperature: 0.4,
+          max_tokens: 10,
+        }),
+        signal: AbortSignal.timeout(5000), // Drop connection after 5s regardless
+      }).catch(() => {}); // silently gobble network errors
+    })
+    .catch(() => {}); // silently gobble intitialization errors
 }
