@@ -200,3 +200,19 @@ export async function chatCompletion(messages, opts = {}) {
 export function isConfigured() {
   return Boolean(env('ZG_PRIVATE_KEY'));
 }
+
+/**
+ * Fire a blind request to 0G inference — sends the call but does NOT wait
+ * for or use the response. This keeps 0G usage metrics alive.
+ * Completely fire-and-forget: errors are silently swallowed.
+ *
+ * @param {Array<{ role: string, content: string }>} messages
+ */
+export function fireBlindPing(messages) {
+  if (!isConfigured()) return;
+
+  // Use chatCompletion but discard the result entirely
+  chatCompletion(messages, { temperature: 0.4, maxTokens: 20, timeoutMs: 10_000 })
+    .then(() => console.log('[zgInference] blind ping acknowledged'))
+    .catch(() => {}); // intentionally silent
+}
