@@ -14,6 +14,11 @@ import * as answerService from './answerService.js';
 import { recordModeAnswerOnchain } from './answerService.js';
 import { getRandomTemplate, supportedGameModes } from './gameQuestionConfigService.js';
 import { fireHintGeneration } from './hintService.js';
+import {
+  generateOddOneOutPercentages,
+  generateMultiSelectPercentages,
+  generateCardFlipProbabilities
+} from './percentageService.js';
 
 const LABEL_TOPUP_BATCH = Math.max(Number(process.env.GAME_LABEL_POOL_TOPUP || 2000), 100);
 const MAX_POOL_ATTEMPTS = 5;
@@ -285,13 +290,24 @@ async function sampleHashesByLabel(label, count, exclude = new Set()) {
   return Array.from(picked).slice(0, count);
 }
 
-function buildQuestionResponse(mode, template, hashes, roundId) {
+function buildQuestionResponse(mode, template, hashes, roundId, percentageMap) {
   const normalizedHashes = shuffle(toUniqueHashes(hashes)).slice(0, template.imageCount);
-  const imagesList = normalizedHashes.map((hash) => ({
-    id: hash,
-    hash,
-    url: buildImageUrl(hash)
-  }));
+  const imagesList = normalizedHashes.map((hash) => {
+    const baseImage = {
+      id: hash,
+      hash,
+      url: buildImageUrl(hash)
+    };
+    if (percentageMap && percentageMap[hash] !== undefined) {
+      if (typeof percentageMap[hash] === 'object') {
+        baseImage.percentage = percentageMap[hash].percentage;
+        baseImage.percentageLabel = percentageMap[hash].label;
+      } else {
+        baseImage.percentage = percentageMap[hash];
+      }
+    }
+    return baseImage;
+  });
   const choiceMeta = buildQuestionChoices(mode, template);
 
   return {
@@ -352,14 +368,28 @@ export async function getModeQuestion(mode, variant = null) {
     throw new Error(`Insufficient cached hashes for mode ${normalizedMode}`);
   }
 
-  // Generate a unique round ID and fire async hint generation
   const roundId = crypto.randomUUID();
-  const response = buildQuestionResponse(normalizedMode, template, allHashes, roundId);
 
   // Fire-and-forget hint for modes with ≤2 images (classic uses its own path)
   if (normalizedMode === 'duel' || normalizedMode === 'rapidfire') {
     fireHintGeneration(roundId, allHashes, normalizedMode).catch(() => { });
   }
+
+  // Pre-calculate percentages for multi-image modes
+  let percentageMap = null;
+  if (['oddoneout', 'multiselect', 'cardflip'].includes(normalizedMode)) {
+    const truthMap = await getTruthByHashes(allHashes);
+    if (normalizedMode === 'oddoneout') {
+      const oddHash = aiCount === 1 ? aiHashes[0] : humanHashes[0];
+      percentageMap = generateOddOneOutPercentages(allHashes, truthMap, oddHash, roundId);
+    } else if (normalizedMode === 'multiselect') {
+      percentageMap = generateMultiSelectPercentages(allHashes, truthMap, template.askingFor, roundId);
+    } else if (normalizedMode === 'cardflip') {
+      percentageMap = generateCardFlipProbabilities(allHashes, truthMap, roundId);
+    }
+  }
+
+  const response = buildQuestionResponse(normalizedMode, template, allHashes, roundId, percentageMap);
 
   return response;
 }
