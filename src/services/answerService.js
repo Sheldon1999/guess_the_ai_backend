@@ -130,7 +130,7 @@ async function updateGateStats(walletAddress, response) {
 }
 
 /**
- * Record a new game mode answer to blockchain (exported, fire-and-forget)
+ * Record a new game mode answer to blockchain.
  * Called by gameModeService for cardflip, rapidfire, duel, oddoneout, multiselect.
  * @param {string} walletAddress - User wallet
  * @param {Object} params - { primaryHash, answer, isCorrect, profile }
@@ -139,7 +139,7 @@ export async function recordModeAnswerOnchain(walletAddress, { primaryHash, answ
   try {
     const session = await loadSession(walletAddress);
     const sessionKey = session?.sessionKey;
-    if (!sessionKey) return;
+    if (!sessionKey) return null;
 
     const questionId = toQuestionId(primaryHash);
 
@@ -169,9 +169,15 @@ export async function recordModeAnswerOnchain(walletAddress, { primaryHash, answ
           console.error('[AnswerService] onchain leaderboard exception:', error);
         });
     }
+
+    if (submission?.hash) {
+      return { transactionHash: submission.hash };
+    }
   } catch {
     // Session not found or onchain failure — non-blocking
   }
+
+  return null;
 }
 
 /**
