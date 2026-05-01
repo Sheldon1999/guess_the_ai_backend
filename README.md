@@ -1,6 +1,10 @@
 # Guess The AI — Backend
 
-> **Client / 0G stack overview:** see the repository root [`README.md`](../README.md) (Guess the AI × 0G — full infrastructure reference).
+**Full product & 0G stack documentation (EVM, Storage, DA, Compute, flows, env):** go up one level and open **[`../README.md`](../README.md)** (also shown automatically as the home page when you open this repository on GitHub or GitLab).
+
+If you only received a **zip** of the project, open the folder’s top-level `README.md` in any editor — that is the same document; it is not hidden inside `guess_the_ai_backend/`.
+
+---
 
 Node 20+, MongoDB, Redis. ESM modules.
 
