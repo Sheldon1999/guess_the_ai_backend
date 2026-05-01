@@ -1,5 +1,7 @@
 # Guess The AI — Backend
 
+> **Client / 0G stack overview:** see the repository root [`README.md`](../README.md) (Guess the AI × 0G — full infrastructure reference).
+
 Node 20+, MongoDB, Redis. ESM modules.
 
 ## Quick start
