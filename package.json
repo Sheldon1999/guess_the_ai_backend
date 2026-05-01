@@ -7,7 +7,9 @@
     "dev": "nodemon src/server.js",
     "start": "node src/server.js",
     "smoke": "node tools/smoke.mjs",
-    "topup:file": "node tools/topup-from-file.mjs ./hashes.txt 200"
+    "topup:file": "node tools/topup-from-file.mjs ./hashes.txt 200",
+    "manifest:labels": "node tools/build-image-manifest.mjs",
+    "manifest:upload-0g": "node tools/upload-manifest-0g.mjs"
   },
   "dependencies": {
     "@privy-io/server-auth": "^1.32.5",
@@ -24,6 +26,8 @@
     "viem": "^2.36.0"
   },
   "devDependencies": {
+    "@0gfoundation/0g-ts-sdk": "^1.2.8",
+    "ethers": "^6.13.1",
     "nodemon": "^3.1.10"
   },
   "engines": {

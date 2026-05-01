@@ -20,7 +20,9 @@ import { validateUsername } from '../utils/validation.js';
 export async function loginV2Handler(req, res) {
   try {
     const data = await loginV2(req.body, {
-      walletFromJwt: req.walletFromJwt
+      walletFromJwt: req.walletFromJwt,
+      clientIp: req.ip || req.socket?.remoteAddress || null,
+      userAgent: req.get('user-agent') || null
     });
     return sendSuccess(res, data);
   } catch (e) {

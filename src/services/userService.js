@@ -17,6 +17,7 @@ import {
   updateGateUsernameRedis
 } from './gate.js';
 import { generatePlayerUsername } from '../utils/crypto.js';
+import { publishDaEvent } from './daGateway.js';
 
 /**
  * Login or register a user
@@ -73,6 +74,17 @@ export async function loginOrRegister(params) {
 
   // Create gate wallet entry
   await ensureGateWallet(walletAddress, loginType);
+
+  publishDaEvent({
+    eventType: "session.login",
+    data: {
+      flow: "legacy",
+      walletAddress,
+      loginType,
+      nameUpdated,
+      isNewUser: !existingUser
+    }
+  });
 
   return { token, username, nameUpdated };
 }

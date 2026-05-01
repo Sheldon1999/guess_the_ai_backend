@@ -14,6 +14,8 @@ import { getGateUserRedis, updateGateUserScoreRedis } from './gate.js';
 import { loadSession } from './sessionService.js';
 import { recordAnswerSubmissionHash, recordSeasonScore } from '../lib/onchain/index.js';
 import { toQuestionId } from '../utils/crypto.js';
+import { enqueueDaAnswerEvent } from './daEventService.js';
+import { publishDaAnswerGatewayEvent } from './daGateway.js';
 
 /**
  * Process a user's answer submission
@@ -22,6 +24,7 @@ import { toQuestionId } from '../utils/crypto.js';
  */
 export async function processAnswer(params) {
   const { walletAddress, hash, guess, isBackup } = params;
+  const startedAtMs = Date.now();
 
   // Get answer result based on Redis availability
   const answerResult = await getAnswerResult({
@@ -46,6 +49,14 @@ export async function processAnswer(params) {
   if (onchain?.transactionHash) {
     response.onchain = onchain;
   }
+
+  await recordDaAnswerEvent({
+    walletAddress,
+    hash,
+    guess,
+    isCorrect: response.correct,
+    latencyMs: Date.now() - startedAtMs
+  });
 
   return response;
 }
@@ -169,8 +180,64 @@ export async function recordModeAnswerOnchain(walletAddress, { primaryHash, answ
           console.error('[AnswerService] onchain leaderboard exception:', error);
         });
     }
+
+    await enqueueDaAnswerEvent({
+      walletAddress,
+      sessionId: session?.sessionId,
+      sessionKey,
+      hash: primaryHash,
+      guess: answer,
+      isCorrect: Boolean(isCorrect),
+      latencyMs: 0,
+      ts: new Date().toISOString()
+    });
+
+    publishDaAnswerGatewayEvent({
+      flow: "game_mode",
+      walletAddress,
+      sessionKey,
+      sessionId: session?.sessionId ?? null,
+      hash: primaryHash,
+      guess: answer,
+      isCorrect: Boolean(isCorrect),
+      latencyMs: 0,
+      ts: new Date().toISOString()
+    });
   } catch {
     // Session not found or onchain failure — non-blocking
+  }
+}
+
+async function recordDaAnswerEvent({ walletAddress, hash, guess, isCorrect, latencyMs }) {
+  try {
+    const session = await loadSession(walletAddress);
+    const sessionKey = session?.sessionKey;
+    if (!sessionKey) return;
+
+    await enqueueDaAnswerEvent({
+      walletAddress,
+      sessionId: session?.sessionId,
+      sessionKey,
+      hash,
+      guess,
+      isCorrect: Boolean(isCorrect),
+      latencyMs: Number(latencyMs) || 0,
+      ts: new Date().toISOString()
+    });
+
+    publishDaAnswerGatewayEvent({
+      flow: "classic",
+      walletAddress,
+      sessionKey,
+      sessionId: session?.sessionId ?? null,
+      hash,
+      guess,
+      isCorrect: Boolean(isCorrect),
+      latencyMs: Number(latencyMs) || 0,
+      ts: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('[AnswerService] DA enqueue error:', error);
   }
 }
 

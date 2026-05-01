@@ -38,7 +38,17 @@ import {
   resolveWalletCandidate
 } from "./walletProvisionService.js";
 
+import { publishDaEvent } from "./daGateway.js";
+
 const normalizeWallet = (value) => normalizeWalletUtil(value) || "";
+
+function daSessionExtras(daClientMeta) {
+  if (!daClientMeta || typeof daClientMeta !== "object") return {};
+  const out = {};
+  if (daClientMeta.clientIp) out.clientIp = String(daClientMeta.clientIp).slice(0, 128);
+  if (daClientMeta.userAgent) out.userAgent = String(daClientMeta.userAgent).slice(0, 512);
+  return out;
+}
 
 /**
  * Verify JWT and extract wallet address
@@ -282,6 +292,20 @@ async function handleExistingUserLogin(context, userDoc, foundBy) {
 
   logV2("info", "success", { walletAddress: maskValue(resolvedWallet), foundBy: foundBy || "existing", hasGateUser: isGateUser, nameUpdated });
 
+  publishDaEvent({
+    eventType: "session.login",
+    data: {
+      flow: "v2",
+      walletAddress: resolvedWallet,
+      foundBy: foundBy || "existing",
+      username,
+      nameUpdated,
+      source: context.request?.source || null,
+      loginMeta: summarizeMeta(context.incomingMeta),
+      ...daSessionExtras(context.daClientMeta)
+    }
+  });
+
   return { token, username, nameUpdated, user: responseUser, foundBy };
 }
 
@@ -339,6 +363,20 @@ async function handleNewUserCreation(context) {
 
   logV2("info", "success", { walletAddress: maskValue(walletToCreate), foundBy: context.externalWalletAddress ? "created_wallet" : "created_embedded", hasGateUser: isGateUser, nameUpdated: false });
 
+  publishDaEvent({
+    eventType: "session.login",
+    data: {
+      flow: "v2",
+      walletAddress: walletToCreate,
+      foundBy: context.externalWalletAddress ? "created_wallet" : "created_embedded",
+      username,
+      nameUpdated: false,
+      source: context.request?.source || null,
+      loginMeta: summarizeMeta(context.incomingMeta),
+      ...daSessionExtras(context.daClientMeta)
+    }
+  });
+
   // Galaxy rewards eligibility
   const isGalaxyUserEligible = await gateWallets.findOne({ walletAddress: walletToCreate });
   if (!isGalaxyUserEligible) {
@@ -368,6 +406,10 @@ export async function loginV2(payload, options = {}) {
   const request = isPlainObject(payload) ? payload : {};
   const requestOptions = isPlainObject(options) ? options : {};
   const now = new Date();
+  const daClientMeta = {
+    clientIp: requestOptions.clientIp ? String(requestOptions.clientIp) : null,
+    userAgent: requestOptions.userAgent ? String(requestOptions.userAgent) : null
+  };
 
   logV2("info", "start", { hasJwt: Boolean(request.jwt), hasWallet: Boolean(request.walletAddress), source: request.source || "unknown", meta: summarizeMeta(request.privyMetaData) });
 
@@ -376,7 +418,15 @@ export async function loginV2(payload, options = {}) {
   const identifiers = buildPrivyIdentifiers(incomingMeta);
   const { externalWalletAddress, embeddedWalletAddress } = resolveWalletAddresses({ request, walletFromJwt, incomingMeta });
 
-  const context = { request, now, incomingMeta, identifiers, externalWalletAddress, embeddedWalletAddress };
+  const context = {
+    request,
+    now,
+    incomingMeta,
+    identifiers,
+    externalWalletAddress,
+    embeddedWalletAddress,
+    daClientMeta
+  };
 
   ensureIdentifiersPresent(context);
 
