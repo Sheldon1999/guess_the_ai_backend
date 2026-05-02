@@ -16,6 +16,8 @@ import leaderboardRoutes from "./routes/leaderboardRoutes.js";
 import sessionRoutes from "./routes/sessionRoutes.js";
 import internalDaRoutes from "./routes/internalDaRoutes.js";
 import verifyRoutes from "./routes/verifyRoutes.js";
+import daPublicRoutes from "./routes/daPublicRoutes.js";
+import { logDaGatewayBootHealth } from "./services/daGatewayInspectService.js";
 
 import { warmOnBoot, startBackgroundTopup } from "./lib/warmup.js";
 import { startRedisFlushWorker } from "./lib/docCache.js";
@@ -61,6 +63,7 @@ gameRoutes(app);
 leaderboardRoutes(app);
 internalDaRoutes(app);
 verifyRoutes(app);
+daPublicRoutes(app);
 
 const server = http.createServer(app);
 attachPresenceWS(server);
@@ -75,3 +78,5 @@ await warmOnBoot().then(r => console.log("[warmup] successfull: ", r)).catch(e =
 const stopTopup = await startBackgroundTopup();
 const stopRedisFlush = await startRedisFlushWorker();
 const stopDaFlush = startDaFlushWorker();
+
+void logDaGatewayBootHealth();
