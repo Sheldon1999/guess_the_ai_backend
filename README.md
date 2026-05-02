@@ -2,7 +2,7 @@
 
 *This `README.md` lives at the **repository root** and is the single main document for the whole project. If you open the repo on GitHub or unpack a zip, start here; subfolder READMEs only point back to this file.*
 
-**Guess the AI** is a Web3 skill game: for every image, the player judges **AI-generated** vs **human-made**. The backend and client are built so that **competitive truth** and **receipts** can live on **0G EVM**, **verifiable labels** on **0G Storage** (indexer-addressed manifests), **availability-oriented gameplay events** flow through **0G DA–compatible pipelines**, and **AI hints** exercise **0G Compute** in parallel with low-latency edge inference. This document is a **complete technical reference** for how each layer is wired — in the same spirit as the Highway Hustle × 0G reference you may have seen: **contracts, env vars, flows, payloads, and failure behavior**.
+**Guess the AI** is a Web3 skill game: for every image, the player judges **AI-generated** vs **human-made**. The backend and client are built so that **competitive truth** and **receipts** can live on **0G EVM**, **verifiable labels** on **0G Storage** (indexer-addressed manifests), **availability-oriented gameplay events** flow through **0G DA–compatible pipelines**, and **AI hints** are produced by **0G Compute** (broker `chatCompletion`) **first**; **Cloudflare Workers AI** is used **only** as a **sequential fallback** when 0G errors, returns empty, or exceeds `HINT_ZG_TIMEOUT_MS`—**not** as the primary path and **not** in parallel with 0G for the same hint. This document is a **complete technical reference** for how each layer is wired — in the same spirit as the Highway Hustle × 0G reference you may have seen: **contracts, env vars, flows, payloads, and failure behavior**.
 
 ---
 
@@ -46,11 +46,11 @@ Express.js Backend (Node.js, ESM)
       ├── 0G DA–aligned pipelines ─────── Batched answer events → optional upstream writer
       │       └── + HTTP gateway (zero_g_da_event_gateway style) → /v1/events
       │
-      └── 0G Compute ─────────────────── @0glabs/0g-serving-broker (blind inference ping)
-              └── + Cloudflare Workers AI (user-visible hint text, low latency)
+      └── 0G Compute ─────────────────── @0glabs/0g-serving-broker (hints — primary path)
+              └── Cloudflare Workers AI — fallback only (after 0G error, empty reply, or `HINT_ZG_TIMEOUT_MS`)
 ```
 
-**Design principle (same philosophy as Highway Hustle):** MongoDB/Redis are the **fast, queryable** source of truth for live play. The **0G stack adds a trustless, decentralized layer**: immutable receipts on **0G EVM**, **content-addressed** label data via **0G Storage + indexer**, **structured event streams** suitable for **DA / availability** downstream, and **real inference traffic** through **0G Compute**. If any 0G dependency is down, **the game keeps running** — chain writes skip, hints may fall back, DA batches retry or drop quietly.
+**Design principle (same philosophy as Highway Hustle):** MongoDB/Redis are the **fast, queryable** source of truth for live play. The **0G stack adds a trustless, decentralized layer**: immutable receipts on **0G EVM**, **content-addressed** label data via **0G Storage + indexer**, **structured event streams** suitable for **DA / availability** downstream, and **real inference traffic** through **0G Compute**. If any 0G dependency is down, **the game keeps running** — chain writes skip, hints may fall back **to Cloudflare only when 0G cannot return text** (if `CF_*` is set), DA batches retry or drop quietly.
 
 ---
 
@@ -370,15 +370,15 @@ enqueueDaAnswerEvent(...) + publishDaAnswerGatewayEvent(...)
 
 ### What it does
 
-During rounds, the UI can show **short cryptic hints** (never spoiling AI vs human). **Cloudflare Workers AI** generates the text players see (low latency). **In parallel**, the **same chat messages** trigger **`fireBlindPing`** via **`@0glabs/0g-serving-broker`** — a **real** signed request to the provider’s OpenAI-compatible endpoint — so **0G Compute** sees genuine inference load.
+During rounds, the UI can show **short cryptic hints** (never spoiling AI vs human). **`zgInference.chatCompletion()`** (`@0glabs/0g-serving-broker`) runs **first** for each hint; **`cfInference.chatCompletion()`** (Cloudflare Workers AI) runs **only after** that if needed—**one stored string per hint** in Redis, **not** two models in parallel. **Cloudflare** is used **only** when 0G errors, returns empty, or the attempt exceeds **`HINT_ZG_TIMEOUT_MS`** (default 12s); the fallback uses **`HINT_CF_TIMEOUT_MS`** (default 30s). Configure **`ZG_PRIVATE_KEY`** for 0G; add **`CF_ACCOUNT_ID` + `CF_API_TOKEN`** if you want the Cloudflare fallback (optional).
 
 ### Endpoints / packages
 
 | Layer | Technology |
 |-------|------------|
-| User-visible hints | **Cloudflare Workers AI** — `src/lib/cfInference.js` |
-| 0G Compute | **`@0glabs/0g-serving-broker`** — `src/lib/zgInference.js` |
-| Orchestration | **`src/services/hintService.js`** |
+| Hint text in Redis | From **0G** when that call succeeds; otherwise from **Cloudflare** if configured — `src/services/hintService.js` |
+| 0G Compute (primary) | **`@0glabs/0g-serving-broker`** — `src/lib/zgInference.js` |
+| Cloudflare (fallback only) | **Workers AI** — `src/lib/cfInference.js` — **not** invoked unless 0G fails or times out |
 
 ### Env (0G broker)
 
@@ -387,9 +387,11 @@ During rounds, the UI can show **short cryptic hints** (never spoiling AI vs hum
 | `ZG_PRIVATE_KEY` | Wallet that pays / authenticates broker discovery (**required** for 0G path) |
 | `ZG_RPC_URL` | Default `https://evmrpc.0g.ai` |
 | `ZG_CHAT_MODEL` | e.g. `deepseek-chat-v3-0324` |
-| `ZG_REQUEST_TIMEOUT_MS` | Full completion timeout for non-blind path |
+| `ZG_REQUEST_TIMEOUT_MS` | Default completion timeout for generic 0G calls |
 
-### Env (Cloudflare)
+### Env (Cloudflare — fallback hints only)
+
+These variables matter **only** for the **second** step when 0G did not produce a hint. Omit them to run **0G-only** hints (no Cloudflare).
 
 | Variable | Role |
 |----------|------|
@@ -397,18 +399,16 @@ During rounds, the UI can show **short cryptic hints** (never spoiling AI vs hum
 | `CF_API_TOKEN` | Workers AI token |
 | `CF_CHAT_MODEL` | Default `@cf/meta/llama-3.1-8b-instruct-fast` |
 
+Hint-only timeouts (optional): `HINT_ZG_TIMEOUT_MS`, `HINT_CF_TIMEOUT_MS`.
+
 ### Integration pattern (diagram)
 
 ```
-Hint generation triggered (e.g. GET /api/game/next10 → fireHintGenerationBatch)
+Hint generation (e.g. /api/game/next10 → fireHintGenerationBatch)
         │
-        ├── [await] Cloudflare Workers AI → hint string → Redis key per hash / round
-        │              GET /api/game/hint/:roundId polls until ready
+        ├── 0G chatCompletion(messages) → Redis → GET /api/game/hint/:roundId
         │
-        └── [parallel] fireBlindPing(messages)
-                       • broker.getRequestHeaders(provider, userContent)
-                       • fetch(providerEndpoint/chat/completions, max_tokens: 10, 5s abort)
-                       • errors swallowed — usage still attributed when request lands
+        └── If 0G fails / empty / timeout → then Cloudflare chatCompletion (**same** messages, sequential)
 ```
 
 ### System prompt (actual string)
@@ -423,15 +423,8 @@ should inspect. Keep the hint under 25 words total. Return ONLY the hint text, n
 ### Implementation excerpt
 
 ```javascript
-// hintService.js — after building messages from MongoDB image descriptions:
-fireBlindPing(messages);  // 0G Compute — fire-and-forget
-
-const hint = await chatCompletion(messages, {
-  temperature: 0.5,
-  maxTokens: 80,
-  timeoutMs: 30_000
-});  // Cloudflare — awaited for Redis
-
+// hintService.js — 0G first, Cloudflare on failure / timeout; then Redis.
+const { hint } = await resolveHint(messages);
 await redis.set(key, hint, 'EX', HINT_ROUND_TTL_SEC);
 ```
 
@@ -589,14 +582,16 @@ DA_GATEWAY_TIMEOUT_MS=8000
 DA_GAME_ID=guess_the_ai
 DA_GATEWAY_PUBLISH_ANSWERS=true
 
-# ── 0G Compute (broker) + Cloudflare ──────────────────────────────────
+# ── 0G Compute (broker = hints primary) + Cloudflare (optional fallback) ─
 ZG_PRIVATE_KEY=0x…
 ZG_RPC_URL=https://evmrpc.0g.ai
 ZG_CHAT_MODEL=deepseek-chat-v3-0324
 
+# Omit CF_* below if you only want 0G hints (no Cloudflare step).
 CF_ACCOUNT_ID=
 CF_API_TOKEN=
 CF_CHAT_MODEL=@cf/meta/llama-3.1-8b-instruct-fast
+# Optional: HINT_ZG_TIMEOUT_MS=12000  HINT_CF_TIMEOUT_MS=30000
 ```
 
 Full lists: `guess_the_ai_backend/.env.example`, `guess_the_ai_frontend/.env.example`.
@@ -633,7 +628,7 @@ Full lists: `guess_the_ai_backend/.env.example`, `guess_the_ai_frontend/.env.exa
 | **0G EVM** | **Three contracts** on chain ID **16661**: player **registration**, **session start/end**, **per-answer submissions** with hashed commitments, and **season leaderboard scores** — explorer-verifiable receipts alongside MongoDB. |
 | **0G Storage** | **Label manifest** (and image pipeline) addressed via **indexer URLs**; players and auditors can **verify AI vs human** against the **same** published blob — **trust-minimized** label proofs. |
 | **0G DA ecosystem** | **Batched answer events** + optional **upstream DA writer** + **HTTP gateway** (`game.answer`) — structured **availability-grade telemetry**, non-blocking. |
-| **0G Compute** | Every hint generation fires **parallel** workload: **Cloudflare** for UX + **0G broker** `fireBlindPing` for **real decentralized inference attribution**. |
+| **0G Compute** | **Hints:** **0G broker** generates text first; **Cloudflare** runs **only** if that step fails, is empty, or hits `HINT_ZG_TIMEOUT_MS`—sequential fallback, not parallel. |
 
 ---
 
