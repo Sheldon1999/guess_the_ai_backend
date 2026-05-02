@@ -119,6 +119,7 @@ function ensureReady() {
  * @param {object} [opts]
  * @param {number} [opts.temperature=0.4]
  * @param {number} [opts.maxTokens=120]
+ * @param {number} [opts.maxRetries] — override env ZG_MAX_RETRIES (e.g. hints use 1 for fast fallback)
  * @returns {Promise<string>} The assistant's plain-text response
  */
 export async function chatCompletion(messages, opts = {}) {
@@ -126,7 +127,10 @@ export async function chatCompletion(messages, opts = {}) {
 
   const defaultTimeout = Number(env('ZG_REQUEST_TIMEOUT_MS', DEFAULT_TIMEOUT_MS));
   const timeoutMs = opts.timeoutMs ?? defaultTimeout;
-  const maxRetries = Number(env('ZG_MAX_RETRIES', DEFAULT_MAX_RETRIES));
+  const maxRetries =
+    opts.maxRetries !== undefined
+      ? Math.max(1, Number(opts.maxRetries))
+      : Number(env('ZG_MAX_RETRIES', DEFAULT_MAX_RETRIES));
   const temperature = opts.temperature ?? 0.4;
   const maxTokens = opts.maxTokens ?? 120;
 

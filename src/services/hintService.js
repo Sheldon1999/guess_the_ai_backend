@@ -1,9 +1,8 @@
 /**
  * Hint Service
  *
- * Generates 1-2 line gameplay hints per round using Cloudflare Workers AI,
- * then stores them in Redis for polling by the frontend.
- * Also fires a blind ping to 0G inference to keep their usage metrics alive.
+ * Generates 1-2 line gameplay hints per round, stored in Redis for polling.
+ * Primary: 0G Compute (broker). Fallback: Cloudflare Workers AI on failure or slow response.
  *
  * Exports:
  *   fireHintGeneration(roundId, hashes, mode)  – fire-and-forget
@@ -13,9 +12,68 @@
 import redis from '../lib/redis.js';
 import { images } from '../lib/mongo.js';
 import { hintRoundKey, HINT_ROUND_TTL_SEC } from '../lib/redisKeys.js';
-import { chatCompletion, isConfigured } from '../lib/cfInference.js';
-import { fireBlindPing } from '../lib/zgInference.js';
+import {
+  chatCompletion as cfChatCompletion,
+  isConfigured as cfInferenceConfigured,
+} from '../lib/cfInference.js';
+import {
+  chatCompletion as zgChatCompletion,
+  isConfigured as zgInferenceConfigured,
+} from '../lib/zgInference.js';
 import { normalizeHash } from '../utils/normalize.js';
+
+function envInt(key, fallback) {
+  const n = Number(process.env[key]);
+  return Number.isFinite(n) && n > 0 ? n : fallback;
+}
+
+/** 0G hint attempt budget; exceed → Cloudflare. Default 12s. */
+const HINT_ZG_TIMEOUT_MS = envInt('HINT_ZG_TIMEOUT_MS', 12_000);
+/** Cloudflare after 0G gives up. Default 30s. */
+const HINT_CF_TIMEOUT_MS = envInt('HINT_CF_TIMEOUT_MS', 30_000);
+
+function hintBackendsConfigured() {
+  return zgInferenceConfigured() || cfInferenceConfigured();
+}
+
+/**
+ * Try 0G first (single attempt for fast fallback). Then Cloudflare if needed.
+ * @returns {Promise<{ hint: string | null, source: '0g' | 'cloudflare' | null }>}
+ */
+async function resolveHint(messages) {
+  if (zgInferenceConfigured()) {
+    try {
+      const hint = await zgChatCompletion(messages, {
+        temperature: 0.5,
+        maxTokens: 80,
+        timeoutMs: HINT_ZG_TIMEOUT_MS,
+        maxRetries: 1,
+      });
+      if (hint?.trim()) {
+        return { hint: hint.trim(), source: '0g' };
+      }
+    } catch (err) {
+      console.warn(`[hintService] 0G hint failed, falling back to Cloudflare: ${err.message}`);
+    }
+  }
+
+  if (cfInferenceConfigured()) {
+    try {
+      const hint = await cfChatCompletion(messages, {
+        temperature: 0.5,
+        maxTokens: 80,
+        timeoutMs: HINT_CF_TIMEOUT_MS,
+      });
+      if (hint?.trim()) {
+        return { hint: hint.trim(), source: 'cloudflare' };
+      }
+    } catch (err) {
+      console.warn(`[hintService] Cloudflare hint failed: ${err.message}`);
+    }
+  }
+
+  return { hint: null, source: null };
+}
 
 const MODE_LABELS = {
   classic: 'Classic (single image — is it AI or human?)',
@@ -94,8 +152,10 @@ async function fetchDescriptions(hashes) {
  * @param {string} mode - Game mode (classic, duel, etc.)
  */
 export async function fireHintGeneration(roundId, hashes, mode) {
-  if (!isConfigured()) {
-    console.warn('[hintService] Cloudflare AI not configured, skipping hint generation');
+  if (!hintBackendsConfigured()) {
+    console.warn(
+      '[hintService] neither 0G (ZG_PRIVATE_KEY) nor Cloudflare (CF_*) configured — skipping hints'
+    );
     return;
   }
 
@@ -118,7 +178,6 @@ export async function fireHintGeneration(roundId, hashes, mode) {
       return;
     }
 
-    // 2. Build prompt and call Cloudflare AI
     const userPrompt = buildUserPrompt(descriptions, mode);
 
     const messages = [
@@ -126,24 +185,19 @@ export async function fireHintGeneration(roundId, hashes, mode) {
       { role: 'user', content: userPrompt },
     ];
 
-    // Blind ping 0G — fire-and-forget, result discarded
-    fireBlindPing(messages);
-
-    const hint = await chatCompletion(
-      messages,
-      { temperature: 0.5, maxTokens: 80, timeoutMs: 30_000 }
-    );
+    const { hint, source } = await resolveHint(messages);
 
     if (!hint) {
-      console.warn(`[hintService] Cloudflare returned empty hint for round ${roundId}`);
+      console.warn(`[hintService] no hint from 0G or Cloudflare for round ${roundId}`);
       return;
     }
 
-    // 3. Store in Redis with TTL
     const key = hintRoundKey(roundId);
     await redis.set(key, hint, 'EX', HINT_ROUND_TTL_SEC);
 
-    console.log(`[hintService] hint ready for round ${roundId}: "${hint.slice(0, 60)}..."`);
+    console.log(
+      `[hintService] hint ready for round ${roundId} (${source}): "${hint.slice(0, 60)}..."`
+    );
   } catch (err) {
     // Fire-and-forget: log but don't throw
     console.error(`[hintService] hint generation failed for round ${roundId}:`, err.message);
@@ -199,18 +253,14 @@ async function generateSingleImageHint(desc) {
       },
     ];
 
-    // Blind ping 0G — fire-and-forget, result discarded
-    fireBlindPing(messages);
-
-    const hint = await chatCompletion(
-      messages,
-      { temperature: 0.5, maxTokens: 80, timeoutMs: 30_000 }
-    );
+    const { hint, source } = await resolveHint(messages);
 
     if (hint) {
       const key = hintRoundKey(desc.hash);
       await redis.set(key, hint, 'EX', HINT_ROUND_TTL_SEC);
-      console.log(`[hintService] hint ready for ${desc.hash.slice(0, 16)}…: "${hint.slice(0, 50)}…"`);
+      console.log(
+        `[hintService] hint ready for ${desc.hash.slice(0, 16)}… (${source}): "${hint.slice(0, 50)}…"`
+      );
     }
   } catch (err) {
     console.warn(`[hintService] hint failed for ${desc.hash.slice(0, 16)}…: ${err.message}`);
@@ -226,7 +276,7 @@ async function generateSingleImageHint(desc) {
  * @param {string[]} hashes - Image hashes in this batch
  */
 export async function fireHintGenerationBatch(hashes) {
-  if (!isConfigured()) return;
+  if (!hintBackendsConfigured()) return;
   if (!hashes?.length) return;
 
   try {
