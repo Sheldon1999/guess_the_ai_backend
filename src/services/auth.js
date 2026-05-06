@@ -55,13 +55,22 @@ function daSessionExtras(daClientMeta) {
  */
 async function verifyJwtWallet(request, walletFromJwtOverride = "") {
   const overrideWallet = normalizeWallet(walletFromJwtOverride);
-  if (!request.jwt) {
+  const source = String(request?.source || "").trim().toLowerCase();
+  const isBrowserSource = source === "browser";
+  const hasJwt = Boolean(request?.jwt);
+
+  if (!hasJwt) {
     if (overrideWallet) return overrideWallet;
-    logV2("warn", "jwt_required", {});
-    throw createHttpError(401, "jwt is required", "jwt_required");
+    // JWT is only compulsory for explicit browser JWT flow.
+    if (isBrowserSource) {
+      logV2("warn", "jwt_required", {});
+      throw createHttpError(401, "jwt is required", "jwt_required");
+    }
+    // Non-browser login can proceed via wallet/privy metadata identifiers.
+    return "";
   }
 
-  if (request.source !== "browser") {
+  if (!isBrowserSource) {
     logV2("warn", "jwt_rejected", { reason: "invalid source" });
     throw createHttpError(401, "invalid request");
   }
