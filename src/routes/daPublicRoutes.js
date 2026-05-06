@@ -1,5 +1,6 @@
 import { users } from "../lib/mongo.js";
 import { normalizeWallet } from "../utils/normalize.js";
+import { protect } from "../middleware/jwt.js";
 import {
   getEventStatus,
   getGatewayBaseUrl,
@@ -13,7 +14,7 @@ import {
  */
 
 export default function daPublicRoutes(app) {
-  app.get("/api/da/snapshot", async (req, res) => {
+  app.get("/api/da/snapshot", protect, async (req, res) => {
     try {
       const raw = req.query.wallet;
       const walletAddress = normalizeWallet(typeof raw === "string" ? raw : "");
@@ -22,6 +23,9 @@ export default function daPublicRoutes(app) {
           success: false,
           message: "Missing or invalid wallet query parameter",
         });
+      }
+      if (normalizeWallet(req.user?.walletAddress) !== walletAddress) {
+        return res.status(403).json({ success: false, message: "Forbidden wallet scope" });
       }
       const user = await users
         .findOne(
@@ -58,7 +62,7 @@ export default function daPublicRoutes(app) {
     }
   });
 
-  app.get("/api/da/status", async (req, res) => {
+  app.get("/api/da/status", protect, async (req, res) => {
     try {
       if (!isGatewayConfigured()) {
         return res.status(503).json({
@@ -73,6 +77,9 @@ export default function daPublicRoutes(app) {
           success: false,
           message: "Missing or invalid wallet query parameter",
         });
+      }
+      if (normalizeWallet(req.user?.walletAddress) !== walletAddress) {
+        return res.status(403).json({ success: false, message: "Forbidden wallet scope" });
       }
       const user = await users
         .findOne({ walletAddress }, { projection: { daGatewaySnapshot: 1 } })
@@ -111,7 +118,7 @@ export default function daPublicRoutes(app) {
     }
   });
 
-  app.get("/api/da/retrieve", async (req, res) => {
+  app.get("/api/da/retrieve", protect, async (req, res) => {
     try {
       if (!isGatewayConfigured()) {
         return res.status(503).json({
@@ -126,6 +133,9 @@ export default function daPublicRoutes(app) {
           success: false,
           message: "Missing or invalid wallet query parameter",
         });
+      }
+      if (normalizeWallet(req.user?.walletAddress) !== walletAddress) {
+        return res.status(403).json({ success: false, message: "Forbidden wallet scope" });
       }
       const user = await users
         .findOne({ walletAddress }, { projection: { daGatewaySnapshot: 1 } })
@@ -149,7 +159,7 @@ export default function daPublicRoutes(app) {
     }
   });
 
-  app.get("/api/da/health", async (_req, res) => {
+  app.get("/api/da/health", protect, async (_req, res) => {
     try {
       const da = await healthCheck();
       return res.json({ success: true, da });

@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "nodemon src/server.js",
     "start": "node src/server.js",
+    "test": "node --test test/**/*.test.js",
     "smoke": "node tools/smoke.mjs",
     "topup:file": "node tools/topup-from-file.mjs ./hashes.txt 200",
     "manifest:labels": "node tools/build-image-manifest.mjs",
@@ -18,6 +19,7 @@
     "dotenv": "^16.4.5",
     "ethers": "^6.16.0",
     "express": "^4.19.2",
+    "express-rate-limit": "^7.4.1",
     "ioredis": "^5.4.1",
     "jsonwebtoken": "^9.0.2",
     "libsodium-wrappers-sumo": "^0.7.15",

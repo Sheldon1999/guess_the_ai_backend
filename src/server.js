@@ -4,6 +4,7 @@ import http from "http";
 import express from "express";
 import cors from "cors";
 import morgan from "morgan";
+import rateLimit from "express-rate-limit";
 
 import "./lib/redis.js";
 import "./lib/mongo.js";
@@ -26,6 +27,24 @@ import { startDaFlushWorker } from "./services/daEventService.js";
 
 const app = express();
 app.use(express.json({ limit: "1mb" }));
+
+const globalLimiter = rateLimit({
+  windowMs: Number(process.env.RATE_LIMIT_WINDOW_MS || 15 * 60 * 1000),
+  max: Number(process.env.RATE_LIMIT_MAX || 600),
+  standardHeaders: true,
+  legacyHeaders: false
+});
+
+const authLimiter = rateLimit({
+  windowMs: Number(process.env.AUTH_RATE_LIMIT_WINDOW_MS || 15 * 60 * 1000),
+  max: Number(process.env.AUTH_RATE_LIMIT_MAX || 40),
+  standardHeaders: true,
+  legacyHeaders: false
+});
+
+app.use(globalLimiter);
+app.use("/api/v2/login", authLimiter);
+app.use("/api/user/login", authLimiter);
 
 const defaultAllowedOrigins = [
   "https://guesstheai.xyz",

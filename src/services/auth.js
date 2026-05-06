@@ -55,7 +55,11 @@ function daSessionExtras(daClientMeta) {
  */
 async function verifyJwtWallet(request, walletFromJwtOverride = "") {
   const overrideWallet = normalizeWallet(walletFromJwtOverride);
-  if (!request.jwt) return overrideWallet || "";
+  if (!request.jwt) {
+    if (overrideWallet) return overrideWallet;
+    logV2("warn", "jwt_required", {});
+    throw createHttpError(401, "jwt is required", "jwt_required");
+  }
 
   if (request.source !== "browser") {
     logV2("warn", "jwt_rejected", { reason: "invalid source" });

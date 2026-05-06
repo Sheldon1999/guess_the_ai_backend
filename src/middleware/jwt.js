@@ -3,11 +3,17 @@ import jwt from 'jsonwebtoken';
 import { promisify } from 'util';
 import { normalizeWallet as normalizeWalletUtil } from '../utils/normalize.js';
 
-// Load environment variables
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
-const BROWSER_JWT_SECRET = process.env.BROWSER_JWT_SECRET || 'dev-secret-change-me';
+// Load environment variables (no insecure fallbacks)
+const JWT_SECRET = process.env.JWT_SECRET;
+const BROWSER_JWT_SECRET = process.env.BROWSER_JWT_SECRET;
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '7d';
 const JWT_ALGORITHM = 'HS256';
+
+const assertAuthSecrets = () => {
+  if (!JWT_SECRET || !BROWSER_JWT_SECRET) {
+    throw new Error('JWT_SECRET and BROWSER_JWT_SECRET must be configured');
+  }
+};
 
 /**
  * Signs a JWT token with the provided payload
@@ -16,6 +22,7 @@ const JWT_ALGORITHM = 'HS256';
  * @returns {Promise<string>} The generated JWT token
  */
 export const signToken = async (payload, options = {}) => {
+  assertAuthSecrets();
   const sign = promisify(jwt.sign);
   return sign(
     payload,
@@ -35,6 +42,7 @@ export const signToken = async (payload, options = {}) => {
  * @throws {Error} If token is invalid or expired
  */
 export const verifyToken = async (token) => {
+  assertAuthSecrets();
   const verify = promisify(jwt.verify);
   return verify(token, JWT_SECRET, { algorithms: [JWT_ALGORITHM] });
 };
@@ -46,6 +54,7 @@ export const verifyToken = async (token) => {
  * @throws {Error} If token is invalid or expired
  */
 export const verifyBrowserToken = async (token) => {
+  assertAuthSecrets();
   const verify = promisify(jwt.verify);
   return verify(token, BROWSER_JWT_SECRET, { algorithms: 'HS256' });
 };

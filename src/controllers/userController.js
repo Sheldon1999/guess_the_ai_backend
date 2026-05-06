@@ -6,6 +6,10 @@
 import { loginV2 } from '../services/auth.js';
 import * as userService from '../services/userService.js';
 import {
+  createWalletChallenge,
+  verifyWalletChallenge
+} from '../services/walletChallengeService.js';
+import {
   sendSuccess,
   sendValidationError,
   sendServerError,
@@ -110,5 +114,65 @@ export async function getProfileHandler(req, res) {
     return sendSuccess(res, profile);
   } catch (e) {
     return sendServerError(res, e, 'UserController.getProfile');
+  }
+}
+
+/**
+ * Create wallet-login challenge
+ * POST /api/auth/challenge
+ */
+export async function createWalletChallengeHandler(req, res) {
+  try {
+    const walletAddress = req.body?.walletAddress;
+    const challenge = await createWalletChallenge(walletAddress);
+    return sendSuccess(res, {
+      walletAddress: challenge.walletAddress,
+      challengeMessage: challenge.challengeMessage,
+      nonce: challenge.nonce,
+      issuedAt: challenge.issuedAt,
+      expiresAt: challenge.expiresAt,
+      expiresInSec: challenge.expiresInSec
+    });
+  } catch (e) {
+    const statusCode = Number(e?.statusCode) || 500;
+    return res.status(statusCode).json({
+      success: false,
+      message: e?.message || "failed to create challenge",
+      code: e?.code || "CHALLENGE_CREATE_FAILED"
+    });
+  }
+}
+
+/**
+ * Verify challenge signature and login/register
+ * POST /api/auth/wallet-login
+ */
+export async function walletSignatureLoginHandler(req, res) {
+  try {
+    const walletAddress = req.body?.walletAddress;
+    const signature = req.body?.signature;
+
+    const verified = await verifyWalletChallenge({ walletAddress, signature });
+    const normalizedWallet = verified.walletAddress;
+
+    const result = await userService.loginOrRegister({
+      walletAddress: normalizedWallet,
+      walletAddressOriginal: walletAddress,
+      privyMetaData: null,
+      loginType: "wallet_signature"
+    });
+
+    return sendSuccess(res, {
+      ...result,
+      authMethod: "wallet_signature",
+      walletAddress: normalizedWallet
+    });
+  } catch (e) {
+    const statusCode = Number(e?.statusCode) || 500;
+    return res.status(statusCode).json({
+      success: false,
+      message: e?.message || "wallet signature login failed",
+      code: e?.code || "WALLET_SIGNATURE_LOGIN_FAILED"
+    });
   }
 }

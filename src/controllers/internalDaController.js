@@ -8,7 +8,7 @@ const DA_INTERNAL_API_KEY = (
 ).trim();
 
 function isAuthorized(req) {
-  if (!DA_INTERNAL_API_KEY) return true;
+  if (!DA_INTERNAL_API_KEY) return false;
   const auth = String(req.headers?.authorization || "");
   const token = auth.startsWith("Bearer ") ? auth.slice(7) : "";
   return token === DA_INTERNAL_API_KEY;

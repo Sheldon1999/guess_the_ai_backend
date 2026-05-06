@@ -677,7 +677,7 @@ export async function answerCardFlip(walletAddress, payload = {}) {
 
   const onchain = await recordModeAnswerOnchain(walletAddress, {
     primaryHash: hash,
-    answer: truth || guess,
+    answer: guess,
     isCorrect,
     profile
   }).catch(() => null);
@@ -713,7 +713,7 @@ export async function answerRapidFire(walletAddress, payload = {}) {
 
   const onchain = await recordModeAnswerOnchain(walletAddress, {
     primaryHash: hash,
-    answer: truth || guess,
+    answer: guess,
     isCorrect,
     profile
   }).catch(() => null);

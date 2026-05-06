@@ -1,9 +1,13 @@
 // src/lib/mongo.js
 import { MongoClient } from "mongodb";
 
-console.log("[mongo] connection: URL: ",process.env.MONGO_URL);
+const mongoUrl = process.env.MONGO_URL;
+if (!mongoUrl) {
+  throw new Error("MONGO_URL is required");
+}
+console.log("[mongo] connection: initialising client");
 
-const client = new MongoClient(process.env.MONGO_URL);
+const client = new MongoClient(mongoUrl);
 try {
   await client.connect();
   console.log("[mongo] connection: successfull");

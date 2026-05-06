@@ -29,8 +29,8 @@ const ANSWER_CONTRACT_ADDRESS = process.env.ONCHAIN_ANSWER_CONTRACT_ADDRESS;
 const LEADERBOARD_CONTRACT_ADDRESS = process.env.ONCHAIN_LEADERBOARD_CONTRACT_ADDRESS;
 const DEFAULT_SEASON_ID = Number(process.env.ONCHAIN_SEASON_ID || "1");
 
-const CHAIN_ID = Number(process.env.ONCHAIN_CHAIN_ID || "16601");
-const CHAIN_NAME = process.env.ONCHAIN_CHAIN_NAME || "0G Galileo Testnet";
+const CHAIN_ID = Number(process.env.ONCHAIN_CHAIN_ID || "16661");
+const CHAIN_NAME = process.env.ONCHAIN_CHAIN_NAME || "0G Mainnet";
 const CHAIN_SYMBOL = process.env.ONCHAIN_CHAIN_CURRENCY || "OG";
 const CHAIN_DECIMALS = Number(process.env.ONCHAIN_CHAIN_DECIMALS || 18);
 

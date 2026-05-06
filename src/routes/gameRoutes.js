@@ -4,6 +4,7 @@
  */
 
 import { protect } from '../middleware/jwt.js';
+import { gameAnswerAbuseGuard } from '../middleware/gameAbuseGuard.js';
 import {
   getNextImageHandler,
   getNext10ImagesHandler,
@@ -36,31 +37,31 @@ export default function gameRoutes(app) {
   app.get('/api/game/next10', protect, getNext10ImagesHandler);
 
   // Submit answer
-  app.post('/api/game/ans', protect, submitAnswerHandler);
+  app.post('/api/game/ans', protect, gameAnswerAbuseGuard, submitAnswerHandler);
 
   // Classic mode APIs
   app.get('/api/game/classic/question', protect, getClassicQuestionHandler);
-  app.post('/api/game/classic/answer', protect, submitClassicModeAnswerHandler);
+  app.post('/api/game/classic/answer', protect, gameAnswerAbuseGuard, submitClassicModeAnswerHandler);
 
   // Multi-select mode APIs
   app.get('/api/game/multiselect/question', protect, getMultiSelectQuestionHandler);
-  app.post('/api/game/multiselect/answer', protect, submitMultiSelectAnswerHandler);
+  app.post('/api/game/multiselect/answer', protect, gameAnswerAbuseGuard, submitMultiSelectAnswerHandler);
 
   // Duel mode APIs
   app.get('/api/game/duel/question', protect, getDuelQuestionHandler);
-  app.post('/api/game/duel/answer', protect, submitDuelAnswerHandler);
+  app.post('/api/game/duel/answer', protect, gameAnswerAbuseGuard, submitDuelAnswerHandler);
 
   // Odd-one-out mode APIs
   app.get('/api/game/oddoneout/question', protect, getOddOneOutQuestionHandler);
-  app.post('/api/game/oddoneout/answer', protect, submitOddOneOutAnswerHandler);
+  app.post('/api/game/oddoneout/answer', protect, gameAnswerAbuseGuard, submitOddOneOutAnswerHandler);
 
   // Card-flip mode APIs
   app.get('/api/game/cardflip/deck', protect, getCardFlipDeckHandler);
-  app.post('/api/game/cardflip/answer', protect, submitCardFlipAnswerHandler);
+  app.post('/api/game/cardflip/answer', protect, gameAnswerAbuseGuard, submitCardFlipAnswerHandler);
 
   // Rapid-fire mode APIs
   app.get('/api/game/rapidfire/question', protect, getRapidFireQuestionHandler);
-  app.post('/api/game/rapidfire/answer', protect, submitRapidFireAnswerHandler);
+  app.post('/api/game/rapidfire/answer', protect, gameAnswerAbuseGuard, submitRapidFireAnswerHandler);
 
   // Hint polling
   app.get('/api/game/hint/:roundId', protect, getHintHandler);

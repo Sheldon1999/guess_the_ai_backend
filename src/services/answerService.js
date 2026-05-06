@@ -45,7 +45,7 @@ export async function processAnswer(params) {
   await updateGateStats(walletAddress, response);
 
   // Record to blockchain and attach tx hash if available
-  const onchain = await recordOnchainWithHash(walletAddress, response, hash);
+  const onchain = await recordOnchainWithHash(walletAddress, response, hash, guess);
   if (onchain?.transactionHash) {
     response.onchain = onchain;
   }
@@ -59,6 +59,15 @@ export async function processAnswer(params) {
   });
 
   return response;
+}
+
+async function claimOnchainSubmissionLock({ walletAddress, sessionKey, questionId }) {
+  if (!walletAddress || !sessionKey || questionId === undefined || questionId === null) {
+    return false;
+  }
+  const key = `onchain:submission:${walletAddress.toLowerCase()}:${sessionKey}:${questionId}`;
+  const claimed = await redis.set(key, "1", "EX", 60 * 60 * 24, "NX");
+  return claimed === "OK";
 }
 
 /**
@@ -153,6 +162,10 @@ export async function recordModeAnswerOnchain(walletAddress, { primaryHash, answ
     if (!sessionKey) return null;
 
     const questionId = toQuestionId(primaryHash);
+    const lockGranted = await claimOnchainSubmissionLock({ walletAddress, sessionKey, questionId });
+    if (!lockGranted) {
+      return null;
+    }
 
     const submission = await recordAnswerSubmissionHash({
       walletAddress,
@@ -249,19 +262,21 @@ async function recordDaAnswerEvent({ walletAddress, hash, guess, isCorrect, late
  * @param {Object} response - Answer response
  * @param {string} hash - Image hash
  */
-async function recordOnchainWithHash(walletAddress, response, hash) {
+async function recordOnchainWithHash(walletAddress, response, hash, guess) {
   // Get session for blockchain recording
   try {
     const session = await loadSession(walletAddress);
     const sessionKey = session?.sessionKey;
     const questionId = toQuestionId(response.imageId ?? hash);
     if (!sessionKey) return null;
+    const lockGranted = await claimOnchainSubmissionLock({ walletAddress, sessionKey, questionId });
+    if (!lockGranted) return null;
 
     const submission = await recordAnswerSubmissionHash({
       walletAddress,
       sessionKey,
       questionId,
-      answer: response.truth,
+      answer: guess,
       isCorrect: response.correct
     });
 
