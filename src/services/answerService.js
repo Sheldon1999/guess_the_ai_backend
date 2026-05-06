@@ -319,7 +319,7 @@ async function recordOnchainWithHash(walletAddress, response, hash, guess) {
       return { transactionHash };
     }
 
-    console.warn('[AnswerService] no transactionHash extracted from submission:', JSON.stringify(submission));
+    console.warn('[AnswerService] no transactionHash extracted from submission:', submission?.skipped ? `skipped: ${submission.reason}` : submission?.error?.shortMessage ?? 'unknown');
   } catch (error) {
     console.error('[AnswerService] onchain recording failed:', error);
   }
