@@ -4,6 +4,8 @@ import { daBatches } from "../lib/mongo.js";
 const DA_UPSTREAM_URL = (process.env.DA_UPSTREAM_URL || "").trim();
 const DA_UPSTREAM_API_KEY = (process.env.DA_UPSTREAM_API_KEY || "").trim();
 const DA_TIMEOUT_MS = Math.max(Number(process.env.DA_TIMEOUT_MS || 12000), 1000);
+const DA_STRICT_UPSTREAM =
+  String(process.env.DA_STRICT_UPSTREAM ?? "true").trim().toLowerCase() !== "false";
 
 function buildUpstreamHeaders() {
   const headers = { "Content-Type": "application/json" };
@@ -83,6 +85,9 @@ export async function submitDaBatch({ events }) {
     upstreamPayload = upstream.payload;
     mode = "upstream";
   } else {
+    if (DA_STRICT_UPSTREAM || process.env.NODE_ENV === "production") {
+      throw new Error("DA_UPSTREAM_URL is required for durable DA submission in production mode");
+    }
     reference = createLocalReference(safeEvents);
   }
 

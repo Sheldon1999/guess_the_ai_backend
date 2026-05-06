@@ -52,6 +52,12 @@ Express.js Backend (Node.js, ESM)
 
 **Design principle (same philosophy as Highway Hustle):** MongoDB/Redis are the **fast, queryable** source of truth for live play. The **0G stack adds a trustless, decentralized layer**: immutable receipts on **0G EVM**, **content-addressed** label data via **0G Storage + indexer**, **structured event streams** suitable for **DA / availability** downstream, and **real inference traffic** through **0G Compute**. If any 0G dependency is down, **the game keeps running** — chain writes skip, hints may fall back **to Cloudflare only when 0G cannot return text** (if `CF_*` is set), DA batches retry or drop quietly.
 
+### Explicit trust model (for review)
+
+- **Operator-signed on-chain receipts:** transactions are submitted by a server-held operator key (`ONCHAIN_PRIVATE_KEY`), not by end-user wallets per action.
+- **What users can verify:** event/score receipts on chain, manifest contents from 0G Storage roots, and DA status/proof material when the DA pipeline is healthy.
+- **What remains centralized:** API-level game logic and ordering are server-controlled; decentralization adds auditability and availability, not full client-trustless execution.
+
 ---
 
 ## 2. 0G EVM — Smart Contracts
@@ -541,6 +547,7 @@ POST /api/verify/image-label
 | `GET` | `/api/leaderboard/alltime` | All-time board |
 | `GET` | `/api/leaderboard/gateUsers` | Gate campaign board |
 | `GET` | `/api/health` | Liveness |
+| `GET` | `/api/health/da-queue` | DA durable queue + dead-letter metrics |
 | `GET` | `/api/img/h/:hash` | Image bytes |
 
 > **Note:** Guess the AI does **not** ship the Highway Hustle–specific routes like `/api/blockchain/scores` unless you add them; explorers read contracts directly via **chainscan**.
@@ -574,6 +581,10 @@ DA_FLUSH_INTERVAL_MS=15000
 DA_TIMEOUT_MS=12000
 DA_UPSTREAM_URL=
 DA_UPSTREAM_API_KEY=
+DA_STRICT_UPSTREAM=true
+DA_QUEUE_RETRIES=5
+DA_QUEUE_BACKOFF_MS=2000
+DA_QUEUE_CONCURRENCY=4
 DA_INTERNAL_API_KEY=
 
 DA_GATEWAY_URL=

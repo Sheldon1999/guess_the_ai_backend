@@ -24,6 +24,7 @@ export const dailyLogins = db.collection("guesstheai_daily_logins");
 export const gateWallets = db.collection("guesstheai_gate_wallets");
 export const sessionDaRefs = db.collection("guesstheai_session_da_refs");
 export const daBatches = db.collection("guesstheai_da_batches");
+export const daDeadLetters = db.collection("guesstheai_da_dead_letters");
 
 // NEW: daily active time (seconds) per wallet per IST day
 export const userActiveDaily = db.collection("guesstheai_user_active_daily");
@@ -41,6 +42,8 @@ await sessionDaRefs.createIndex({ sessionKey: 1 }, { unique: true });
 await sessionDaRefs.createIndex({ walletAddress: 1, updatedAt: -1 });
 await daBatches.createIndex({ reference: 1 }, { unique: true });
 await daBatches.createIndex({ createdAt: -1 });
+await daDeadLetters.createIndex({ eventId: 1 }, { unique: true });
+await daDeadLetters.createIndex({ createdAt: -1 });
 
 // NEW index
 await userActiveDaily.createIndex({ walletAddress: 1, dateLocal: 1 }, { unique: true });

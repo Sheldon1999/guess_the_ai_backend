@@ -1,88 +1,23 @@
-import { sessionDaRefs } from "../lib/mongo.js";
+import { Queue, Worker } from "bullmq";
+import IORedis from "ioredis";
 import { randomUUID } from "node:crypto";
+import { daDeadLetters, sessionDaRefs } from "../lib/mongo.js";
+import { submitDaBatch } from "./daWriterService.js";
 
-const DEFAULT_DA_API_URL = `http://127.0.0.1:${Number(process.env.PORT || 3000)}/api/internal/da/submit`;
-const DA_API_URL = (process.env.DA_API_URL || DEFAULT_DA_API_URL).trim();
-const DA_API_KEY = (process.env.DA_API_KEY || "").trim();
+const REDIS_URL = (process.env.REDIS_URL || "").trim();
 const DA_BATCH_SIZE = Math.max(Number(process.env.DA_BATCH_SIZE || 20), 1);
-const DA_FLUSH_INTERVAL_MS = Math.max(Number(process.env.DA_FLUSH_INTERVAL_MS || 15000), 1000);
-const DA_TIMEOUT_MS = Math.max(Number(process.env.DA_TIMEOUT_MS || 12000), 1000);
-const DA_ENABLED = Boolean(DA_API_URL);
+const DA_QUEUE_RETRIES = Math.max(Number(process.env.DA_QUEUE_RETRIES || 5), 1);
+const DA_QUEUE_BACKOFF_MS = Math.max(Number(process.env.DA_QUEUE_BACKOFF_MS || 2000), 100);
+const DA_QUEUE_CONCURRENCY = Math.max(Number(process.env.DA_QUEUE_CONCURRENCY || 4), 1);
+const DA_ENABLED = Boolean(REDIS_URL);
+const DA_QUEUE_NAME = "guesstheai_da_answer_events";
 
-let queue = [];
-let flushInFlight = null;
-let flushTimer = null;
+let redis = null;
+let queue = null;
+let worker = null;
 
 function nowIso() {
   return new Date().toISOString();
-}
-
-function buildDaHeaders() {
-  const headers = { "Content-Type": "application/json" };
-  if (DA_API_KEY) headers.Authorization = `Bearer ${DA_API_KEY}`;
-  return headers;
-}
-
-function extractDaReference(payload) {
-  if (!payload || typeof payload !== "object") return null;
-  return (
-    payload.reference ||
-    payload.batchId ||
-    payload.id ||
-    payload.root ||
-    payload.txHash ||
-    payload?.data?.reference ||
-    payload?.data?.batchId ||
-    payload?.data?.id ||
-    payload?.data?.root ||
-    payload?.result?.reference ||
-    payload?.result?.batchId ||
-    null
-  );
-}
-
-async function submitBatchToDa(events) {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), DA_TIMEOUT_MS);
-  try {
-    const body = {
-      createdAt: nowIso(),
-      source: "guess-the-ai",
-      events
-    };
-
-    const response = await fetch(DA_API_URL, {
-      method: "POST",
-      headers: buildDaHeaders(),
-      body: JSON.stringify(body),
-      signal: controller.signal
-    });
-
-    let payload = null;
-    try {
-      payload = await response.json();
-    } catch {
-      payload = null;
-    }
-
-    if (!response.ok) {
-      return {
-        ok: false,
-        error: new Error(`DA submit failed with status ${response.status}`),
-        payload
-      };
-    }
-
-    return {
-      ok: true,
-      reference: extractDaReference(payload),
-      payload
-    };
-  } catch (error) {
-    return { ok: false, error };
-  } finally {
-    clearTimeout(timeout);
-  }
 }
 
 async function persistBatchReference(events, daResult) {
@@ -136,39 +71,72 @@ async function persistBatchReference(events, daResult) {
   await Promise.all(updates);
 }
 
-export async function flushDaAnswerEvents() {
-  if (!DA_ENABLED) return { skipped: true, reason: "disabled" };
-  if (flushInFlight) return flushInFlight;
-  if (!queue.length) return { flushed: 0 };
+async function writeDeadLetter(event, error, attemptsMade) {
+  await daDeadLetters.updateOne(
+    { eventId: event.eventId },
+    {
+      $set: {
+        eventId: event.eventId,
+        walletAddress: event.walletAddress || "",
+        sessionKey: event.sessionKey || "",
+        event,
+        error: String(error?.message || error),
+        attemptsMade: Number(attemptsMade || 0),
+        updatedAt: new Date()
+      },
+      $setOnInsert: { createdAt: new Date() }
+    },
+    { upsert: true }
+  );
+}
 
-  const batch = queue.slice(0, DA_BATCH_SIZE);
-  queue = queue.slice(batch.length);
+function ensureDaQueue() {
+  if (!DA_ENABLED) return;
+  if (queue && worker && redis) return;
 
-  flushInFlight = (async () => {
-    const result = await submitBatchToDa(batch);
-    if (!result.ok) {
-      console.error("[DA] batch submit failed:", result.error || result.payload);
-      // Put failed events back to queue head for retry.
-      queue = [...batch, ...queue];
-      return { flushed: 0, error: result.error || result.payload };
+  redis = new IORedis(REDIS_URL, { maxRetriesPerRequest: null });
+  queue = new Queue(DA_QUEUE_NAME, {
+    connection: redis,
+    prefix: "GUESSTHEAI:DA:"
+  });
+
+  worker = new Worker(
+    DA_QUEUE_NAME,
+    async (job) => {
+      const events = Array.isArray(job?.data?.events) ? job.data.events : [];
+      if (!events.length) return { skipped: true };
+      const result = await submitDaBatch({ events });
+      await persistBatchReference(events, result);
+      return { ok: true, accepted: events.length, reference: result.reference || null };
+    },
+    {
+      connection: redis,
+      prefix: "GUESSTHEAI:DA:",
+      concurrency: DA_QUEUE_CONCURRENCY
     }
+  );
 
-    await persistBatchReference(batch, result);
-    return { flushed: batch.length, reference: result.reference || null };
-  })();
-
-  try {
-    return await flushInFlight;
-  } finally {
-    flushInFlight = null;
-  }
+  worker.on("failed", async (job, err) => {
+    try {
+      const attemptsMade = Number(job?.attemptsMade || 0);
+      const attemptsLimit = Number(job?.opts?.attempts || DA_QUEUE_RETRIES);
+      if (attemptsMade >= attemptsLimit) {
+        const events = Array.isArray(job?.data?.events) ? job.data.events : [];
+        for (const event of events) {
+          await writeDeadLetter(event, err, attemptsMade);
+        }
+      }
+    } catch (dlqError) {
+      console.error("[DA] DLQ write failed:", dlqError);
+    }
+  });
 }
 
 export async function enqueueDaAnswerEvent(event) {
   if (!DA_ENABLED) return { skipped: true, reason: "disabled" };
   if (!event?.sessionKey) return { skipped: true, reason: "session-required" };
-
-  queue.push({
+  ensureDaQueue();
+  const normalized = {
     eventId: event.eventId || randomUUID(),
     walletAddress: event.walletAddress || "",
     sessionId: event.sessionId || "",
@@ -178,26 +146,52 @@ export async function enqueueDaAnswerEvent(event) {
     isCorrect: Boolean(event.isCorrect),
     latencyMs: Number(event.latencyMs) || 0,
     ts: event.ts || nowIso()
-  });
+  };
 
-  if (queue.length >= DA_BATCH_SIZE) {
-    return flushDaAnswerEvents();
-  }
-
-  return { queued: true, size: queue.length };
+  const jobId = `da-${normalized.eventId}`;
+  await queue.add(
+    "submit",
+    { events: [normalized] },
+    {
+      jobId,
+      attempts: DA_QUEUE_RETRIES,
+      backoff: { type: "exponential", delay: DA_QUEUE_BACKOFF_MS },
+      removeOnComplete: 2000,
+      removeOnFail: 5000
+    }
+  );
+  const counts = await queue.getJobCounts("waiting", "active", "failed", "completed");
+  return {
+    queued: (counts.waiting || 0) + (counts.active || 0),
+    failed: counts.failed || 0,
+    completed: counts.completed || 0
+  };
 }
 
 export function startDaFlushWorker() {
-  if (!DA_ENABLED || flushTimer) return () => {};
-  flushTimer = setInterval(() => {
-    flushDaAnswerEvents().catch((error) => {
-      console.error("[DA] periodic flush failed:", error);
-    });
-  }, DA_FLUSH_INTERVAL_MS);
-
+  ensureDaQueue();
   return () => {
-    if (flushTimer) clearInterval(flushTimer);
-    flushTimer = null;
+    worker?.close().catch(() => {});
+    queue?.close().catch(() => {});
+    redis?.quit().catch(() => {});
+    worker = null;
+    queue = null;
+    redis = null;
+  };
+}
+
+export async function getDaQueueMetrics() {
+  if (!queue) {
+    return { enabled: DA_ENABLED, queued: 0, failed: 0, completed: 0, retries: DA_QUEUE_RETRIES };
+  }
+  const counts = await queue.getJobCounts("waiting", "active", "failed", "completed");
+  return {
+    enabled: DA_ENABLED,
+    queued: (counts.waiting || 0) + (counts.active || 0),
+    failed: counts.failed || 0,
+    completed: counts.completed || 0,
+    retries: DA_QUEUE_RETRIES,
+    batchSize: DA_BATCH_SIZE
   };
 }
 
