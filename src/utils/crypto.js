@@ -46,3 +46,24 @@ export function generateSessionId() {
 export function generatePlayerUsername() {
   return `Player_${Date.now()}`;
 }
+
+/**
+ * Extract a transaction hash from any onchain write result shape.
+ * Handles viem receipts, raw hashes, and error objects that carry a hash.
+ * @param {unknown} result
+ * @returns {string|null}
+ */
+export function extractTransactionHash(result) {
+  if (!result || typeof result !== 'object') return null;
+  const candidates = [
+    result.transactionHash,
+    result.hash,
+    result.txHash,
+    result.receipt?.transactionHash,
+    result.error?.transactionHash,
+  ];
+  for (const value of candidates) {
+    if (typeof value === 'string' && value.trim()) return value;
+  }
+  return null;
+}

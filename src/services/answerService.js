@@ -13,23 +13,8 @@ import {
 import { getGateUserRedis, updateGateUserScoreRedis } from './gate.js';
 import { loadSession, startSession } from './sessionService.js';
 import { recordAnswerSubmissionHash, recordSeasonScore } from '../lib/onchain/index.js';
-import { toQuestionId } from '../utils/crypto.js';
+import { toQuestionId, extractTransactionHash } from '../utils/crypto.js';
 import { publishDaAnswerGatewayEvent } from './daGateway.js';
-
-function extractTransactionHash(result) {
-  if (!result || typeof result !== 'object') return null;
-  const candidates = [
-    result.transactionHash,
-    result.hash,
-    result.txHash,
-    result.receipt?.transactionHash,
-    result.error?.transactionHash
-  ];
-  for (const value of candidates) {
-    if (typeof value === 'string' && value.trim()) return value;
-  }
-  return null;
-}
 
 /**
  * Process a user's answer submission
