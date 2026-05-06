@@ -14,7 +14,6 @@ import { getGateUserRedis, updateGateUserScoreRedis } from './gate.js';
 import { loadSession } from './sessionService.js';
 import { recordAnswerSubmissionHash, recordSeasonScore } from '../lib/onchain/index.js';
 import { toQuestionId } from '../utils/crypto.js';
-import { enqueueDaAnswerEvent } from './daEventService.js';
 import { publishDaAnswerGatewayEvent } from './daGateway.js';
 
 /**
@@ -194,17 +193,6 @@ export async function recordModeAnswerOnchain(walletAddress, { primaryHash, answ
         });
     }
 
-    await enqueueDaAnswerEvent({
-      walletAddress,
-      sessionId: session?.sessionId,
-      sessionKey,
-      hash: primaryHash,
-      guess: answer,
-      isCorrect: Boolean(isCorrect),
-      latencyMs: 0,
-      ts: new Date().toISOString()
-    });
-
     publishDaAnswerGatewayEvent({
       flow: "game_mode",
       walletAddress,
@@ -229,17 +217,6 @@ async function recordDaAnswerEvent({ walletAddress, hash, guess, isCorrect, late
     const sessionKey = session?.sessionKey;
     if (!sessionKey) return;
 
-    await enqueueDaAnswerEvent({
-      walletAddress,
-      sessionId: session?.sessionId,
-      sessionKey,
-      hash,
-      guess,
-      isCorrect: Boolean(isCorrect),
-      latencyMs: Number(latencyMs) || 0,
-      ts: new Date().toISOString()
-    });
-
     publishDaAnswerGatewayEvent({
       flow: "classic",
       walletAddress,
@@ -252,7 +229,7 @@ async function recordDaAnswerEvent({ walletAddress, hash, guess, isCorrect, late
       ts: new Date().toISOString()
     });
   } catch (error) {
-    console.error('[AnswerService] DA enqueue error:', error);
+    console.error('[AnswerService] DA gateway publish error:', error);
   }
 }
 

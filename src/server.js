@@ -15,7 +15,6 @@ import userRoutes from "./routes/userRoutes.js";
 import gameRoutes from "./routes/gameRoutes.js";
 import leaderboardRoutes from "./routes/leaderboardRoutes.js";
 import sessionRoutes from "./routes/sessionRoutes.js";
-import internalDaRoutes from "./routes/internalDaRoutes.js";
 import verifyRoutes from "./routes/verifyRoutes.js";
 import daPublicRoutes from "./routes/daPublicRoutes.js";
 import { logDaGatewayBootHealth } from "./services/daGatewayInspectService.js";
@@ -23,7 +22,6 @@ import { logDaGatewayBootHealth } from "./services/daGatewayInspectService.js";
 import { warmOnBoot, startBackgroundTopup } from "./lib/warmup.js";
 import { startRedisFlushWorker } from "./lib/docCache.js";
 import { attachPresenceWS } from "./ws/presence.js";
-import { startDaFlushWorker } from "./services/daEventService.js";
 
 const app = express();
 app.use(express.json({ limit: "1mb" }));
@@ -80,7 +78,6 @@ healthRoutes(app);
 imageRoutes(app);
 gameRoutes(app);
 leaderboardRoutes(app);
-internalDaRoutes(app);
 verifyRoutes(app);
 daPublicRoutes(app);
 
@@ -96,6 +93,5 @@ await warmOnBoot().then(r => console.log("[warmup] successfull: ", r)).catch(e =
 // Optional background maintainer (no-op if PREFETCH_INTERVAL_SEC=0)
 const stopTopup = await startBackgroundTopup();
 const stopRedisFlush = await startRedisFlushWorker();
-const stopDaFlush = startDaFlushWorker();
 
 void logDaGatewayBootHealth();

@@ -128,7 +128,7 @@ export function publishDaEvent({ eventType, data }) {
 }
 
 /**
- * Per-answer event to DA gateway (parallel to legacy daEventService batch pipeline).
+ * Per-answer event to DA gateway (single DA pipeline).
  * Set DA_GATEWAY_PUBLISH_ANSWERS=false to disable.
  * @param {Record<string, unknown>} data — hash, guess, isCorrect, sessionKey, walletAddress, ...
  */

@@ -5,8 +5,7 @@
 
 import redis from '../lib/redis.js';
 import db from '../lib/mongo.js';
-import { daDeadLetters } from '../lib/mongo.js';
-import { getDaQueueMetrics } from '../services/daEventService.js';
+import { healthCheck as daGatewayHealthCheck, getGatewayBaseUrl } from '../services/daGatewayInspectService.js';
 
 /**
  * Basic health check handler
@@ -35,12 +34,13 @@ export async function dependenciesHealthHandler(req, res) {
 
 export async function daQueueHealthHandler(req, res) {
   try {
-    const metrics = await getDaQueueMetrics();
-    const deadLetters = await daDeadLetters.countDocuments({});
+    const gatewayHealth = await daGatewayHealthCheck();
     return res.json({
       ok: true,
-      queue: metrics,
-      deadLetters
+      gateway: {
+        url: getGatewayBaseUrl(),
+        ...gatewayHealth
+      }
     });
   } catch (error) {
     return res.status(500).json({ error: error.message });
