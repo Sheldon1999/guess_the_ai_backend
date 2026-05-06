@@ -1,6 +1,6 @@
 # Guess the AI × 0G — Full Infrastructure Stack
 
-*This `README.md` lives at the **repository root** and is the single main document for the whole project. If you open the repo on GitHub or unpack a zip, start here; subfolder READMEs only point back to this file.*
+*Created by the Kult Games team.*
 
 **Guess the AI** is a Web3 skill game: for every image, the player judges **AI-generated** vs **human-made**. The backend and client are built so that **competitive truth** and **receipts** can live on **0G EVM**, **verifiable labels** on **0G Storage** (indexer-addressed manifests), **availability-oriented gameplay events** flow through **0G DA–compatible pipelines**, and **AI hints** are produced by **0G Compute** (broker `chatCompletion`) **first**; **Cloudflare Workers AI** is used **only** as a **sequential fallback** when 0G errors, returns empty, or exceeds `HINT_ZG_TIMEOUT_MS`—**not** as the primary path and **not** in parallel with 0G for the same hint. This document is a **complete technical reference** for how each layer is wired — in the same spirit as the Highway Hustle × 0G reference you may have seen: **contracts, env vars, flows, payloads, and failure behavior**.
 
@@ -305,20 +305,6 @@ So: we **feed the DA ecosystem with append-only gameplay telemetry** suitable fo
       "ts": "2026-05-01T12:00:00.000Z"
     }
   ]
-}
-```
-
-### MongoDB — `daBatches` document (shape)
-
-```javascript
-// Written by daWriterService.js after each accepted batch
-{
-  reference: String,      // upstream id OR local-da-<fingerprint>-<uuid>
-  mode: String,            // "upstream" | "local"
-  size: Number,
-  events: Array,
-  upstreamPayload: Object, // raw JSON from upstream when present
-  createdAt: Date
 }
 ```
 
