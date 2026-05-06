@@ -55,9 +55,15 @@ function daSessionExtras(daClientMeta) {
  */
 async function verifyJwtWallet(request, walletFromJwtOverride = "") {
   const overrideWallet = normalizeWallet(walletFromJwtOverride);
+  const requestWallet = normalizeWallet(request?.walletAddress);
   const source = String(request?.source || "").trim().toLowerCase();
   const isBrowserSource = source === "browser";
   const hasJwt = Boolean(request?.jwt);
+
+  // Wallet-first rule: if request already has walletAddress, don't require JWT.
+  if (requestWallet) {
+    return requestWallet;
+  }
 
   if (!hasJwt) {
     if (overrideWallet) return overrideWallet;
