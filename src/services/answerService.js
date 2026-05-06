@@ -16,6 +16,21 @@ import { recordAnswerSubmissionHash, recordSeasonScore } from '../lib/onchain/in
 import { toQuestionId } from '../utils/crypto.js';
 import { publishDaAnswerGatewayEvent } from './daGateway.js';
 
+function extractTransactionHash(result) {
+  if (!result || typeof result !== 'object') return null;
+  const candidates = [
+    result.transactionHash,
+    result.hash,
+    result.txHash,
+    result.receipt?.transactionHash,
+    result.error?.transactionHash
+  ];
+  for (const value of candidates) {
+    if (typeof value === 'string' && value.trim()) return value;
+  }
+  return null;
+}
+
 /**
  * Process a user's answer submission
  * @param {Object} params - Answer parameters
@@ -173,6 +188,7 @@ export async function recordModeAnswerOnchain(walletAddress, { primaryHash, answ
       answer,
       isCorrect
     });
+    const transactionHash = extractTransactionHash(submission);
 
     if (submission?.error) {
       console.error('[AnswerService] onchain submission error:', submission.error);
@@ -204,6 +220,10 @@ export async function recordModeAnswerOnchain(walletAddress, { primaryHash, answ
       latencyMs: 0,
       ts: new Date().toISOString()
     });
+
+    if (transactionHash) {
+      return { transactionHash };
+    }
   } catch {
     // Session not found or onchain failure — non-blocking
   }
@@ -256,6 +276,7 @@ async function recordOnchainWithHash(walletAddress, response, hash, guess) {
       answer: guess,
       isCorrect: response.correct
     });
+    const transactionHash = extractTransactionHash(submission);
 
     if (submission?.error) {
       console.error('[AnswerService] onchain submission error:', submission.error);
@@ -276,8 +297,8 @@ async function recordOnchainWithHash(walletAddress, response, hash, guess) {
         });
     }
 
-    if (submission?.hash) {
-      return { transactionHash: submission.hash };
+    if (transactionHash) {
+      return { transactionHash };
     }
   } catch {
     // Session not found or onchain failure
