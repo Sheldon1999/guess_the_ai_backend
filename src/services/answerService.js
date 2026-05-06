@@ -11,7 +11,7 @@ import {
   handleRedisAnswer
 } from './answerHandler.js';
 import { getGateUserRedis, updateGateUserScoreRedis } from './gate.js';
-import { loadSession } from './sessionService.js';
+import { loadSession, startSession } from './sessionService.js';
 import { recordAnswerSubmissionHash, recordSeasonScore } from '../lib/onchain/index.js';
 import { toQuestionId } from '../utils/crypto.js';
 import { publishDaAnswerGatewayEvent } from './daGateway.js';
@@ -260,14 +260,28 @@ async function recordDaAnswerEvent({ walletAddress, hash, guess, isCorrect, late
  * @param {string} hash - Image hash
  */
 async function recordOnchainWithHash(walletAddress, response, hash, guess) {
-  // Get session for blockchain recording
   try {
-    const session = await loadSession(walletAddress);
+    let session = await loadSession(walletAddress);
+
+    if (!session?.sessionKey) {
+      // Session missing (race condition on first answer or session expired) — auto-create
+      console.warn('[AnswerService] no session for wallet, auto-creating:', walletAddress);
+      await startSession(walletAddress);
+      session = await loadSession(walletAddress);
+    }
+
     const sessionKey = session?.sessionKey;
+    if (!sessionKey) {
+      console.warn('[AnswerService] still no sessionKey after auto-create, skipping onchain');
+      return null;
+    }
+
     const questionId = toQuestionId(response.imageId ?? hash);
-    if (!sessionKey) return null;
     const lockGranted = await claimOnchainSubmissionLock({ walletAddress, sessionKey, questionId });
-    if (!lockGranted) return null;
+    if (!lockGranted) {
+      console.warn('[AnswerService] onchain lock already claimed:', { walletAddress, questionId });
+      return null;
+    }
 
     const submission = await recordAnswerSubmissionHash({
       walletAddress,
@@ -276,11 +290,15 @@ async function recordOnchainWithHash(walletAddress, response, hash, guess) {
       answer: guess,
       isCorrect: response.correct
     });
-    const transactionHash = extractTransactionHash(submission);
 
+    if (submission?.skipped) {
+      console.warn('[AnswerService] onchain submission skipped:', submission.reason);
+    }
     if (submission?.error) {
       console.error('[AnswerService] onchain submission error:', submission.error);
     }
+
+    const transactionHash = extractTransactionHash(submission);
 
     if (response.correct && response.profile?.correctAnswers != null) {
       recordSeasonScore({
@@ -300,8 +318,10 @@ async function recordOnchainWithHash(walletAddress, response, hash, guess) {
     if (transactionHash) {
       return { transactionHash };
     }
-  } catch {
-    // Session not found or onchain failure
+
+    console.warn('[AnswerService] no transactionHash extracted from submission:', JSON.stringify(submission));
+  } catch (error) {
+    console.error('[AnswerService] onchain recording failed:', error);
   }
   return null;
 }
