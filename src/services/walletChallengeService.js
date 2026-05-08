@@ -1,12 +1,13 @@
 import crypto from "node:crypto";
-import { isAddress, recoverMessageAddress } from "viem";
+import { isAddress, getAddress } from "viem";
+import { SiweMessage } from "siwe";
 import { normalizeWallet } from "../utils/normalize.js";
 
 const CHALLENGE_TTL_SEC = Math.max(
   Number(process.env.WALLET_CHALLENGE_TTL_SEC || 300),
   60
 );
-const CHALLENGE_PREFIX = "auth:challenge:v1";
+const NONCE_PREFIX = "auth:siwe:nonce:v1";
 let redisClient = null;
 
 async function getRedis() {
@@ -16,56 +17,51 @@ async function getRedis() {
   return redisClient;
 }
 
-export function buildChallengeMessage({ walletAddress, nonce, issuedAtIso, expiresAtIso }) {
-  return [
-    "Guess The AI - Wallet Login Challenge",
-    `Wallet: ${walletAddress}`,
-    `Nonce: ${nonce}`,
-    `IssuedAt: ${issuedAtIso}`,
-    `ExpiresAt: ${expiresAtIso}`,
-    "Purpose: Prove wallet ownership for login.",
-  ].join("\n");
-}
-
-function challengeKey(walletAddress) {
-  return `${CHALLENGE_PREFIX}:${walletAddress.toLowerCase()}`;
+function nonceKey(walletAddress) {
+  return `${NONCE_PREFIX}:${walletAddress.toLowerCase()}`;
 }
 
 export async function createWalletChallenge(rawWalletAddress) {
-  const walletAddress = normalizeWallet(rawWalletAddress);
-  if (!walletAddress || !isAddress(walletAddress)) {
+  const normalized = normalizeWallet(rawWalletAddress);
+  if (!normalized || !isAddress(normalized)) {
     const e = new Error("invalid wallet address");
     e.statusCode = 400;
     throw e;
   }
+  const walletAddress = getAddress(normalized);
 
   const nonce = crypto.randomBytes(16).toString("hex");
   const issuedAt = new Date();
-  const expiresAt = new Date(issuedAt.getTime() + CHALLENGE_TTL_SEC * 1000);
-  const challengeMessage = buildChallengeMessage({
-    walletAddress,
+
+  const siweMessage = new SiweMessage({
+    domain: process.env.APP_DOMAIN || "guesstheai.xyz",
+    address: walletAddress,
+    statement: "Sign in to Guess The AI",
+    uri: process.env.APP_URI || "https://guesstheai.xyz",
+    version: "1",
+    chainId: Number(process.env.APP_CHAIN_ID || 1),
     nonce,
-    issuedAtIso: issuedAt.toISOString(),
-    expiresAtIso: expiresAt.toISOString(),
+    issuedAt: issuedAt.toISOString(),
   });
 
-  const payload = {
+  const challengeMessage = siweMessage.prepareMessage();
+
+  const redis = await getRedis();
+  await redis.set(nonceKey(walletAddress), nonce, "EX", CHALLENGE_TTL_SEC);
+
+  return {
     walletAddress,
     nonce,
     issuedAt: issuedAt.toISOString(),
-    expiresAt: expiresAt.toISOString(),
+    expiresAt: new Date(issuedAt.getTime() + CHALLENGE_TTL_SEC * 1000).toISOString(),
     challengeMessage,
+    expiresInSec: CHALLENGE_TTL_SEC,
   };
-
-  const redis = await getRedis();
-  await redis.set(challengeKey(walletAddress), JSON.stringify(payload), "EX", CHALLENGE_TTL_SEC);
-  return { ...payload, expiresInSec: CHALLENGE_TTL_SEC };
 }
 
-export async function verifyWalletChallenge({ walletAddress: rawWalletAddress, signature }) {
-  const walletAddress = normalizeWallet(rawWalletAddress);
-  if (!walletAddress || !isAddress(walletAddress)) {
-    const e = new Error("invalid wallet address");
+export async function verifyWalletChallenge({ message, signature }) {
+  if (!message || typeof message !== "string") {
+    const e = new Error("message is required");
     e.statusCode = 400;
     throw e;
   }
@@ -75,33 +71,47 @@ export async function verifyWalletChallenge({ walletAddress: rawWalletAddress, s
     throw e;
   }
 
-  const key = challengeKey(walletAddress);
+  let siweMessage;
+  try {
+    siweMessage = new SiweMessage(message);
+  } catch {
+    const e = new Error("invalid SIWE message format");
+    e.statusCode = 400;
+    throw e;
+  }
+
+  const walletAddress = normalizeWallet(siweMessage.address);
+  if (!walletAddress) {
+    const e = new Error("could not extract wallet address from SIWE message");
+    e.statusCode = 400;
+    throw e;
+  }
+
   const redis = await getRedis();
-  const raw = await redis.get(key);
-  if (!raw) {
-    const e = new Error("challenge expired or not found");
-    e.statusCode = 401;
-    throw e;
-  }
-  const challenge = JSON.parse(raw);
-  if (!challenge?.challengeMessage) {
-    const e = new Error("invalid challenge state");
-    e.statusCode = 500;
-    throw e;
-  }
-
-  const recovered = await recoverMessageAddress({
-    message: challenge.challengeMessage,
-    signature,
-  });
-  if (normalizeWallet(recovered) !== walletAddress) {
-    const e = new Error("signature does not match wallet");
+  const storedNonce = await redis.get(nonceKey(walletAddress));
+  if (!storedNonce || storedNonce !== siweMessage.nonce) {
+    const e = new Error("invalid or expired nonce");
     e.statusCode = 401;
     throw e;
   }
 
-  // one-time challenge to prevent replay
-  await redis.del(key);
-  return { walletAddress, nonce: challenge.nonce };
+  let result;
+  try {
+    result = await siweMessage.verify({ signature });
+  } catch {
+    await redis.del(nonceKey(walletAddress));
+    const e = new Error("SIWE verification failed");
+    e.statusCode = 401;
+    throw e;
+  }
+
+  if (!result.success) {
+    await redis.del(nonceKey(walletAddress));
+    const e = new Error("invalid SIWE signature");
+    e.statusCode = 401;
+    throw e;
+  }
+
+  await redis.del(nonceKey(walletAddress));
+  return { walletAddress, nonce: siweMessage.nonce };
 }
-

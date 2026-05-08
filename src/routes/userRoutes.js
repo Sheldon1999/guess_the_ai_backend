@@ -11,7 +11,7 @@ import {
   createWalletChallengeHandler,
   walletSignatureLoginHandler,
   updateUsernameHandler,
-  getProfileHandler
+  getProfileHandler,
 } from '../controllers/userController.js';
 
 export default function userRoutes(app) {

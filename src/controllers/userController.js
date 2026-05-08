@@ -144,35 +144,36 @@ export async function createWalletChallengeHandler(req, res) {
 }
 
 /**
- * Verify challenge signature and login/register
+ * Verify SIWE signature and login/register
  * POST /api/auth/wallet-login
+ * Body: { message: "<SIWE EIP-4361 text>", signature: "0x..." }
  */
 export async function walletSignatureLoginHandler(req, res) {
   try {
-    const walletAddress = req.body?.walletAddress;
+    const message = req.body?.message;
     const signature = req.body?.signature;
 
-    const verified = await verifyWalletChallenge({ walletAddress, signature });
+    const verified = await verifyWalletChallenge({ message, signature });
     const normalizedWallet = verified.walletAddress;
 
     const result = await userService.loginOrRegister({
       walletAddress: normalizedWallet,
-      walletAddressOriginal: walletAddress,
+      walletAddressOriginal: normalizedWallet,
       privyMetaData: null,
-      loginType: "wallet_signature"
+      loginType: "wallet_siwe",
     });
 
     return sendSuccess(res, {
       ...result,
-      authMethod: "wallet_signature",
-      walletAddress: normalizedWallet
+      authMethod: "wallet_siwe",
+      walletAddress: normalizedWallet,
     });
   } catch (e) {
     const statusCode = Number(e?.statusCode) || 500;
     return res.status(statusCode).json({
       success: false,
-      message: e?.message || "wallet signature login failed",
-      code: e?.code || "WALLET_SIGNATURE_LOGIN_FAILED"
+      message: e?.message || "wallet SIWE login failed",
+      code: e?.code || "WALLET_SIWE_LOGIN_FAILED",
     });
   }
 }
