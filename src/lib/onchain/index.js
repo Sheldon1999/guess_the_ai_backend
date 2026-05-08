@@ -94,16 +94,44 @@ async function getFeeBump(multiplier = 1.2) {
   }
 }
 
-/**
- * Write to blockchain contract
- * @param {Object} options - Write options
- * @param {string} options.functionName - Contract function name
- * @param {Array} options.args - Function arguments
- * @param {string} options.tag - Logging tag
- * @param {string} options.address - Contract address
- * @param {Array} options.abi - Contract ABI
- * @returns {Promise<Object>} Transaction result
- */
+// Nonce serializer — all writes queue here so each gets a unique, monotonically
+// increasing nonce. Concurrent calls no longer race on eth_getTransactionCount.
+let _nonceQueue = Promise.resolve();
+let _localNonce = null;
+
+function serializeWrite(task) {
+  const slot = _nonceQueue.then(task);
+  // Keep the queue advancing even when a task throws
+  _nonceQueue = slot.catch(() => {});
+  return slot;
+}
+
+async function acquireNonce() {
+  if (_localNonce === null) {
+    _localNonce = await publicClient.getTransactionCount({
+      address: account.address,
+      blockTag: "pending"
+    });
+  }
+  return _localNonce++;
+}
+
+// Drop the cached nonce so the next acquireNonce() re-fetches from chain.
+// Called whenever a nonce-related error is caught.
+function dropNonce() {
+  _localNonce = null;
+}
+
+function isNonceError(msg) {
+  return (
+    msg.includes("replacement transaction underpriced") ||
+    msg.includes("fee too low") ||
+    msg.includes("invalid parameters") ||
+    msg.includes("nonce too low") ||
+    msg.includes("already known")
+  );
+}
+
 async function write({ functionName, args, tag, address, abi }) {
   if (!walletClient || !publicClient) {
     return { skipped: true, reason: "not-configured" };
@@ -112,73 +140,61 @@ async function write({ functionName, args, tag, address, abi }) {
     return { skipped: true, reason: "missing-address" };
   }
 
-  // Helper to send with optional nonce/fee bump
-  const sendWith = async (opts = {}) =>
-    walletClient.writeContract({
-      address,
-      abi,
-      functionName,
-      args,
-      ...opts
-    });
+  return serializeWrite(async () => {
+    const sendWith = async (opts = {}) =>
+      walletClient.writeContract({ address, abi, functionName, args, ...opts });
 
-  try {
-    const feeBump = await getFeeBump(1.25);
-    const hash = await sendWith(feeBump);
+    try {
+      const nonce = await acquireNonce();
+      const feeBump = await getFeeBump(1.25);
+      const hash = await sendWith({ nonce, ...feeBump });
 
-    const receipt = await publicClient.waitForTransactionReceipt({
-      hash,
-      timeout: 300_000, // 5 minutes to account for slower finality
-      pollingInterval: 4_000
-    });
-    return { hash, receipt };
-  } catch (error) {
-    // Handle common gas replacement / nonce race by retrying once with higher fee & explicit nonce
-    const msg = error?.shortMessage || error?.message || "";
-    const isUnderpriced =
-      msg.includes("replacement transaction underpriced") ||
-      msg.includes("fee too low") ||
-      msg.includes("invalid parameters");
-
-    if (isUnderpriced && account) {
-      try {
-        const nonce = await publicClient.getTransactionCount({
-          address: account.address,
-          blockTag: "pending"
-        });
-        const feeBump = await getFeeBump(1.35);
-        const hash = await sendWith({ nonce, ...feeBump });
-        const receipt = await publicClient.waitForTransactionReceipt({
-          hash,
-          timeout: 300_000,
-          pollingInterval: 4_000
-        });
-        return { hash, receipt, retried: true };
-      } catch (retryError) {
-        console.error(`[onchain] ${tag} retry failed`, retryError);
-        return { error: retryError };
-      }
-    }
-
-    // If receipt not found yet, surface hash so caller can poll later
-    if ((error?.shortMessage || "").includes("could not be found")) {
-      console.warn(`[onchain] ${tag} pending; receipt not found yet`, {
-        message: error.shortMessage,
-        hash: error?.transactionHash
+      const receipt = await publicClient.waitForTransactionReceipt({
+        hash,
+        timeout: 300_000,
+        pollingInterval: 4_000
       });
-      return { pending: true, hash: error?.transactionHash };
-    }
+      return { hash, receipt };
+    } catch (error) {
+      const msg = error?.shortMessage || error?.message || "";
 
-    console.error(`[onchain] ${tag} failed`, error);
-    return { error };
-  }
+      if (isNonceError(msg) && account) {
+        dropNonce(); // force re-fetch from chain before retry
+        try {
+          const nonce = await acquireNonce();
+          const feeBump = await getFeeBump(1.35);
+          const hash = await sendWith({ nonce, ...feeBump });
+          const receipt = await publicClient.waitForTransactionReceipt({
+            hash,
+            timeout: 300_000,
+            pollingInterval: 4_000
+          });
+          return { hash, receipt, retried: true };
+        } catch (retryError) {
+          dropNonce();
+          console.error(`[onchain] ${tag} retry failed`, retryError);
+          return { error: retryError };
+        }
+      }
+
+      // If receipt not found yet, surface hash so caller can poll later
+      if (msg.includes("could not be found")) {
+        console.warn(`[onchain] ${tag} pending; receipt not found yet`, {
+          message: error.shortMessage,
+          hash: error?.transactionHash
+        });
+        return { pending: true, hash: error?.transactionHash };
+      }
+
+      console.error(`[onchain] ${tag} failed`, error);
+      return { error };
+    }
+  });
 }
 
-/**
- * Submit a transaction and return the hash without waiting for a receipt.
- * @param {Object} options - Write options
- * @returns {Promise<Object>} Transaction hash result
- */
+// writeNoWait returns the tx hash immediately — caller shows it to the user
+// for on-chain verification via the 0G explorer. Still serialized through the
+// nonce queue so concurrent answer submissions don't collide.
 async function writeNoWait({ functionName, args, tag, address, abi }) {
   if (!walletClient || !publicClient) {
     return { skipped: true, reason: "not-configured" };
@@ -187,44 +203,36 @@ async function writeNoWait({ functionName, args, tag, address, abi }) {
     return { skipped: true, reason: "missing-address" };
   }
 
-  const sendWith = async (opts = {}) =>
-    walletClient.writeContract({
-      address,
-      abi,
-      functionName,
-      args,
-      ...opts
-    });
+  return serializeWrite(async () => {
+    const sendWith = async (opts = {}) =>
+      walletClient.writeContract({ address, abi, functionName, args, ...opts });
 
-  try {
-    const feeBump = await getFeeBump(1.25);
-    const hash = await sendWith(feeBump);
-    return { hash };
-  } catch (error) {
-    const msg = error?.shortMessage || error?.message || "";
-    const isUnderpriced =
-      msg.includes("replacement transaction underpriced") ||
-      msg.includes("fee too low") ||
-      msg.includes("invalid parameters");
+    try {
+      const nonce = await acquireNonce();
+      const feeBump = await getFeeBump(1.25);
+      const hash = await sendWith({ nonce, ...feeBump });
+      return { hash };
+    } catch (error) {
+      const msg = error?.shortMessage || error?.message || "";
 
-    if (isUnderpriced && account) {
-      try {
-        const nonce = await publicClient.getTransactionCount({
-          address: account.address,
-          blockTag: "pending"
-        });
-        const feeBump = await getFeeBump(1.35);
-        const hash = await sendWith({ nonce, ...feeBump });
-        return { hash, retried: true };
-      } catch (retryError) {
-        console.error(`[onchain] ${tag} retry failed`, retryError);
-        return { error: retryError };
+      if (isNonceError(msg) && account) {
+        dropNonce();
+        try {
+          const nonce = await acquireNonce();
+          const feeBump = await getFeeBump(1.35);
+          const hash = await sendWith({ nonce, ...feeBump });
+          return { hash, retried: true };
+        } catch (retryError) {
+          dropNonce();
+          console.error(`[onchain] ${tag} retry failed`, retryError);
+          return { error: retryError };
+        }
       }
-    }
 
-    console.error(`[onchain] ${tag} failed`, error);
-    return { error };
-  }
+      console.error(`[onchain] ${tag} failed`, error);
+      return { error };
+    }
+  });
 }
 
 export function deriveSessionKey(sessionId) {
