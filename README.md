@@ -629,4 +629,4 @@ Full lists: `guess_the_ai_backend/.env.example`, `guess_the_ai_frontend/.env.exa
 
 ---
 
-*Repository roots: `guess_the_ai_backend/` (API, on-chain, DA, hints, manifest tools), `guess_the_ai_frontend/` (React, Privy, Wallet verification UI). This README is the **single-stack narrative** for **0G Foundation / partner review** — aligned in structure and depth with the Highway Hustle × 0G reference document, adapted faithfully to **this** codebase.*
+*Repository roots: `guess_the_ai_backend/` (API, on-chain, DA, hints, manifest tools), `guess_the_ai_frontend/` (React, Privy, Wallet verification UI).*
