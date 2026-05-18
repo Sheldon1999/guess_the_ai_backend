@@ -43,11 +43,10 @@ export async function processAnswer(params) {
   // Update gate user stats if applicable
   await updateGateStats(walletAddress, response);
 
-  // Record to blockchain and attach tx hash if available
-  const onchain = await recordOnchainWithHash(walletAddress, response, hash, guess);
-  if (onchain?.transactionHash) {
-    response.onchain = onchain;
-  }
+  // On-chain writes must not block the answer response (see shared nonce queue).
+  void recordOnchainWithHash(walletAddress, response, hash, guess).catch((error) => {
+    console.error('[AnswerService] onchain recording exception:', error);
+  });
 
   await recordDaAnswerEvent({
     walletAddress,
@@ -154,7 +153,14 @@ async function updateGateStats(walletAddress, response) {
  * @param {string} walletAddress - User wallet
  * @param {Object} params - { primaryHash, answer, isCorrect, profile }
  */
-export async function recordModeAnswerOnchain(walletAddress, { primaryHash, answer, isCorrect, profile }) {
+export function recordModeAnswerOnchain(walletAddress, params) {
+  void recordModeAnswerOnchainImpl(walletAddress, params).catch((error) => {
+    console.error('[AnswerService] mode onchain exception:', error);
+  });
+  return null;
+}
+
+async function recordModeAnswerOnchainImpl(walletAddress, { primaryHash, answer, isCorrect, profile }) {
   try {
     const session = await loadSession(walletAddress);
     const sessionKey = session?.sessionKey;
@@ -238,12 +244,7 @@ async function recordDaAnswerEvent({ walletAddress, hash, guess, isCorrect, late
   }
 }
 
-/**
- * Record answer to blockchain (fire-and-forget)
- * @param {string} walletAddress - User wallet
- * @param {Object} response - Answer response
- * @param {string} hash - Image hash
- */
+/** Record answer to blockchain (async; do not await from processAnswer). */
 async function recordOnchainWithHash(walletAddress, response, hash, guess) {
   try {
     let session = await loadSession(walletAddress);

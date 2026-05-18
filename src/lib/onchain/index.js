@@ -132,64 +132,41 @@ function isNonceError(msg) {
   );
 }
 
-async function write({ functionName, args, tag, address, abi }) {
-  if (!walletClient || !publicClient) {
-    return { skipped: true, reason: "not-configured" };
-  }
-  if (!address) {
-    return { skipped: true, reason: "missing-address" };
-  }
+const RECEIPT_WATCH_TIMEOUT_MS = Number(process.env.ONCHAIN_RECEIPT_TIMEOUT_MS || 120_000);
 
-  return serializeWrite(async () => {
-    const sendWith = async (opts = {}) =>
-      walletClient.writeContract({ address, abi, functionName, args, ...opts });
+/** Poll for receipt outside the nonce queue — never block API handlers. */
+function watchReceiptInBackground(hash, tag) {
+  if (!publicClient || !hash) return;
 
+  void (async () => {
     try {
-      const nonce = await acquireNonce();
-      const feeBump = await getFeeBump(1.25);
-      const hash = await sendWith({ nonce, ...feeBump });
-
       const receipt = await publicClient.waitForTransactionReceipt({
         hash,
-        timeout: 300_000,
+        timeout: RECEIPT_WATCH_TIMEOUT_MS,
         pollingInterval: 4_000
       });
-      return { hash, receipt };
+      console.log(`[onchain] ${tag} confirmed`, {
+        hash,
+        block: receipt.blockNumber?.toString()
+      });
     } catch (error) {
       const msg = error?.shortMessage || error?.message || "";
-
-      if (isNonceError(msg) && account) {
-        dropNonce(); // force re-fetch from chain before retry
-        try {
-          const nonce = await acquireNonce();
-          const feeBump = await getFeeBump(1.35);
-          const hash = await sendWith({ nonce, ...feeBump });
-          const receipt = await publicClient.waitForTransactionReceipt({
-            hash,
-            timeout: 300_000,
-            pollingInterval: 4_000
-          });
-          return { hash, receipt, retried: true };
-        } catch (retryError) {
-          dropNonce();
-          console.error(`[onchain] ${tag} retry failed`, retryError);
-          return { error: retryError };
-        }
+      if (msg.includes("Timed out")) {
+        console.warn(`[onchain] ${tag} receipt timeout (tx may confirm later)`, { hash });
+      } else {
+        console.error(`[onchain] ${tag} receipt error`, error);
       }
-
-      // If receipt not found yet, surface hash so caller can poll later
-      if (msg.includes("could not be found")) {
-        console.warn(`[onchain] ${tag} pending; receipt not found yet`, {
-          message: error.shortMessage,
-          hash: error?.transactionHash
-        });
-        return { pending: true, hash: error?.transactionHash };
-      }
-
-      console.error(`[onchain] ${tag} failed`, error);
-      return { error };
     }
-  });
+  })();
+}
+
+/** Broadcast only; receipt confirmation runs in the background. */
+async function write({ functionName, args, tag, address, abi }) {
+  const result = await writeNoWait({ functionName, args, tag, address, abi });
+  if (result?.hash) {
+    watchReceiptInBackground(result.hash, tag);
+  }
+  return result;
 }
 
 // writeNoWait returns the tx hash immediately — caller shows it to the user
