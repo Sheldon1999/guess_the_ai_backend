@@ -36,6 +36,31 @@ function hintBackendsConfigured() {
   return zgInferenceConfigured() || cfInferenceConfigured();
 }
 
+/** @typedef {'0g' | 'cloudflare'} HintInferenceSource */
+
+async function storeHint(roundId, hint, source) {
+  const payload = JSON.stringify({ hint, source });
+  await redis.set(hintRoundKey(roundId), payload, 'EX', HINT_ROUND_TTL_SEC);
+}
+
+/**
+ * @param {string|null} raw
+ * @returns {{ hint: string, source: HintInferenceSource } | null}
+ */
+function parseStoredHint(raw) {
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw);
+    if (parsed && typeof parsed.hint === 'string' && parsed.hint.trim()) {
+      const source = parsed.source === '0g' || parsed.source === 'cloudflare' ? parsed.source : 'cloudflare';
+      return { hint: parsed.hint.trim(), source };
+    }
+  } catch {
+    // Legacy: plain string hint (pre-source field)
+  }
+  return { hint: raw.trim(), source: 'cloudflare' };
+}
+
 /**
  * Try 0G first (single attempt for fast fallback). Then Cloudflare if needed.
  * @returns {Promise<{ hint: string | null, source: '0g' | 'cloudflare' | null }>}
@@ -192,8 +217,7 @@ export async function fireHintGeneration(roundId, hashes, mode) {
       return;
     }
 
-    const key = hintRoundKey(roundId);
-    await redis.set(key, hint, 'EX', HINT_ROUND_TTL_SEC);
+    await storeHint(roundId, hint, source);
 
     console.log(
       `[hintService] hint ready for round ${roundId} (${source}): "${hint.slice(0, 60)}..."`
@@ -208,18 +232,18 @@ export async function fireHintGeneration(roundId, hashes, mode) {
  * Read hint for a round (called by the polling endpoint).
  *
  * @param {string} roundId
- * @returns {Promise<{ ready: boolean, hint?: string }>}
+ * @returns {Promise<{ ready: boolean, hint?: string, source?: HintInferenceSource }>}
  */
 export async function getHintForRound(roundId) {
   if (!roundId) {
     return { ready: false };
   }
 
-  const key = hintRoundKey(roundId);
-  const hint = await redis.get(key);
+  const raw = await redis.get(hintRoundKey(roundId));
+  const parsed = parseStoredHint(raw);
 
-  if (hint) {
-    return { ready: true, hint };
+  if (parsed) {
+    return { ready: true, hint: parsed.hint, source: parsed.source };
   }
 
   return { ready: false };
@@ -256,8 +280,7 @@ async function generateSingleImageHint(desc) {
     const { hint, source } = await resolveHint(messages);
 
     if (hint) {
-      const key = hintRoundKey(desc.hash);
-      await redis.set(key, hint, 'EX', HINT_ROUND_TTL_SEC);
+      await storeHint(desc.hash, hint, source);
       console.log(
         `[hintService] hint ready for ${desc.hash.slice(0, 16)}… (${source}): "${hint.slice(0, 50)}…"`
       );

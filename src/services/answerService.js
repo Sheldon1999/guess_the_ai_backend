@@ -157,7 +157,7 @@ export function recordModeAnswerOnchain(walletAddress, params) {
   void recordModeAnswerOnchainImpl(walletAddress, params).catch((error) => {
     console.error('[AnswerService] mode onchain exception:', error);
   });
-  return null;
+  return Promise.resolve(null);
 }
 
 async function recordModeAnswerOnchainImpl(walletAddress, { primaryHash, answer, isCorrect, profile }) {
