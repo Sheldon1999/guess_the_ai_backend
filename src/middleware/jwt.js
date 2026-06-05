@@ -61,6 +61,9 @@ export const verifyBrowserToken = async (token) => {
 
 const normalizeWallet = (value) => normalizeWalletUtil(value) || "";
 
+export const extractBrowserJwtWallet = (decodedData) =>
+  normalizeWallet(decodedData?.walletAddress || decodedData?.wallet_address || "");
+
 // Optionally decode browser JWT for /v2/login flows and attach the wallet to the request.
 export const decodeBrowserJwtOptional = async (req, res, next) => {
   req.walletFromJwt = "";
@@ -73,7 +76,7 @@ export const decodeBrowserJwtOptional = async (req, res, next) => {
 
   try {
     const decodedData = await verifyBrowserToken(jwtToken);
-    const walletFromJwt = normalizeWallet(decodedData?.walletAddress);
+    const walletFromJwt = extractBrowserJwtWallet(decodedData);
     if (!walletFromJwt) {
       return res.status(400).json({ success: false, message: "invalid walletAddress" });
     }

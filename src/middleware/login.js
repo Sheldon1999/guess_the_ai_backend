@@ -1,4 +1,4 @@
-import { verifyBrowserToken } from "./jwt.js";
+import { verifyBrowserToken, extractBrowserJwtWallet } from "./jwt.js";
 import { normalizeWallet as normalizeWalletUtil } from "../utils/normalize.js";
 
 const normalizeWallet = (w) => normalizeWalletUtil(w) || "";
@@ -16,7 +16,7 @@ export const putWalletAdd = async (req, res, next) => {
         }
 
         const decodedData = await verifyBrowserToken(jwt);
-        const rawWalletAddress = String(decodedData?.walletAddress || "").trim();
+        const rawWalletAddress = extractBrowserJwtWallet(decodedData);
         if (!rawWalletAddress) {
             return res.status(400).json({ success: false, message: "invalid walletAddress" });
         }

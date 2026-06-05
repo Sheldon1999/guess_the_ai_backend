@@ -6,7 +6,7 @@
 
 import { isAddress } from "viem";
 import { users, dailyLogins, gateWallets } from "../lib/mongo.js";
-import { generateAuthToken, verifyBrowserToken } from "../middleware/jwt.js";
+import { generateAuthToken, verifyBrowserToken, extractBrowserJwtWallet } from "../middleware/jwt.js";
 import { recordUserRegistration } from "../lib/onchain/index.js";
 import { readUserFromRedis, writeUserToRedis } from "../lib/docCache.js";
 import { createGateUserRedis, getGateUserRedis } from "./gate.js";
@@ -88,7 +88,7 @@ async function verifyJwtWallet(request, walletFromJwtOverride = "") {
 
   try {
     const decodedData = await verifyBrowserToken(request.jwt);
-    const walletFromJwt = normalizeWallet(decodedData?.walletAddress);
+    const walletFromJwt = extractBrowserJwtWallet(decodedData);
     logV2("info", "jwt_verified", { walletAddress: maskValue(walletFromJwt) });
     return walletFromJwt;
   } catch {
