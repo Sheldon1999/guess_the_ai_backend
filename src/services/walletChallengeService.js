@@ -21,6 +21,21 @@ function nonceKey(walletAddress) {
   return `${NONCE_PREFIX}:${walletAddress.toLowerCase()}`;
 }
 
+export function buildChallengeMessage({
+  walletAddress,
+  nonce,
+  issuedAtIso,
+  expiresAtIso,
+}) {
+  return [
+    "Prove wallet ownership to sign in to Guess The AI",
+    `Wallet: ${walletAddress}`,
+    `Nonce: ${nonce}`,
+    `IssuedAt: ${issuedAtIso}`,
+    `ExpiresAt: ${expiresAtIso}`,
+  ].join("\n");
+}
+
 export async function createWalletChallenge(rawWalletAddress) {
   const normalized = normalizeWallet(rawWalletAddress);
   if (!normalized || !isAddress(normalized)) {

@@ -18,6 +18,7 @@ import {
 } from './gate.js';
 import { generatePlayerUsername } from '../utils/crypto.js';
 import { publishDaEvent } from './daGateway.js';
+import { attachContestRewardToProfile } from './highwayHustleContestService.js';
 
 /**
  * Login or register a user
@@ -320,11 +321,15 @@ export async function getProfile(walletAddress) {
 
   if (!profile) return null;
 
+  const responseProfile = { ...profile };
+
   // Add campaign data if exists
   const cachedGateUser = await getGateUserRedis(walletAddress);
   if (cachedGateUser) {
-    profile.campaign = cachedGateUser;
+    responseProfile.campaign = cachedGateUser;
   }
 
-  return profile;
+  return await attachContestRewardToProfile(responseProfile, walletAddress, {
+    forceSync: true
+  });
 }

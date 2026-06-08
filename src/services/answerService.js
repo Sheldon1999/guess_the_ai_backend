@@ -15,6 +15,7 @@ import { loadSession, startSession } from './sessionService.js';
 import { recordAnswerSubmissionHash, recordSeasonScore } from '../lib/onchain/index.js';
 import { toQuestionId, extractTransactionHash } from '../utils/crypto.js';
 import { publishDaAnswerGatewayEvent } from './daGateway.js';
+import { attachContestRewardToResponse } from './highwayHustleContestService.js';
 
 /**
  * Process a user's answer submission
@@ -43,6 +44,8 @@ export async function processAnswer(params) {
   // Update gate user stats if applicable
   await updateGateStats(walletAddress, response);
 
+  const rewardAwareResponse = await attachContestRewardToResponse(response, walletAddress);
+
   // On-chain writes must not block the answer response (see shared nonce queue).
   void recordOnchainWithHash(walletAddress, response, hash, guess).catch((error) => {
     console.error('[AnswerService] onchain recording exception:', error);
@@ -56,7 +59,7 @@ export async function processAnswer(params) {
     latencyMs: Date.now() - startedAtMs
   });
 
-  return response;
+  return rewardAwareResponse;
 }
 
 async function claimOnchainSubmissionLock({ walletAddress, sessionKey, questionId }) {

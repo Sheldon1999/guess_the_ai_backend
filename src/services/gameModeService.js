@@ -19,6 +19,7 @@ import {
   generateMultiSelectPercentages,
   generateCardFlipProbabilities
 } from './percentageService.js';
+import { attachContestRewardToResponse } from './highwayHustleContestService.js';
 
 const LABEL_TOPUP_BATCH = Math.max(Number(process.env.GAME_LABEL_POOL_TOPUP || 2000), 100);
 const MAX_POOL_ATTEMPTS = 5;
@@ -471,6 +472,11 @@ function buildModeAnswer(mode, results, score, profile = null, extra = {}) {
   };
 }
 
+async function buildModeAnswerWithContest(walletAddress, mode, results, score, profile = null, extra = {}) {
+  const response = buildModeAnswer(mode, results, score, profile, extra);
+  return await attachContestRewardToResponse(response, walletAddress);
+}
+
 function normalizeSelectedSet(selectedHashes) {
   return new Set(toUniqueHashes(selectedHashes));
 }
@@ -566,7 +572,7 @@ export async function answerMultiSelect(walletAddress, payload = {}) {
     profile
   });
 
-  return buildModeAnswer('multiselect', results, buildScore(delta, correctCount, wrongCount), profile, {
+  return await buildModeAnswerWithContest(walletAddress, 'multiselect', results, buildScore(delta, correctCount, wrongCount), profile, {
     askingFor,
     ...(onchain?.transactionHash ? { onchain } : {})
   });
@@ -612,7 +618,7 @@ export async function answerDuel(walletAddress, payload = {}) {
     profile
   });
 
-  return buildModeAnswer('duel', results, buildScore(delta, isCorrect ? 1 : 0, isCorrect ? 0 : 1), profile, {
+  return await buildModeAnswerWithContest(walletAddress, 'duel', results, buildScore(delta, isCorrect ? 1 : 0, isCorrect ? 0 : 1), profile, {
     askingFor,
     variant,
     selectedHash,
@@ -663,7 +669,7 @@ export async function answerOddOneOut(walletAddress, payload = {}) {
     profile
   });
 
-  return buildModeAnswer('oddoneout', results, buildScore(delta, isCorrect ? 1 : 0, isCorrect ? 0 : 1), profile, {
+  return await buildModeAnswerWithContest(walletAddress, 'oddoneout', results, buildScore(delta, isCorrect ? 1 : 0, isCorrect ? 0 : 1), profile, {
     askingFor,
     oddHash,
     selectedHash,
@@ -698,7 +704,7 @@ export async function answerCardFlip(walletAddress, payload = {}) {
     profile
   });
 
-  return buildModeAnswer('cardflip', [{ hash, guess, truth, isCorrect }], buildScore(isCorrect ? 1 : 0, isCorrect ? 1 : 0, isCorrect ? 0 : 1), profile, {
+  return await buildModeAnswerWithContest(walletAddress, 'cardflip', [{ hash, guess, truth, isCorrect }], buildScore(isCorrect ? 1 : 0, isCorrect ? 1 : 0, isCorrect ? 0 : 1), profile, {
     ...(onchain?.transactionHash ? { onchain } : {})
   });
 }
@@ -734,7 +740,7 @@ export async function answerRapidFire(walletAddress, payload = {}) {
     profile
   });
 
-  return buildModeAnswer('rapidfire', [{ hash, guess, truth, isCorrect }], buildScore(delta, isCorrect ? 1 : 0, isCorrect ? 0 : 1), profile, {
+  return await buildModeAnswerWithContest(walletAddress, 'rapidfire', [{ hash, guess, truth, isCorrect }], buildScore(delta, isCorrect ? 1 : 0, isCorrect ? 0 : 1), profile, {
     comboUsed: safeCombo,
     ...(onchain?.transactionHash ? { onchain } : {})
   });
