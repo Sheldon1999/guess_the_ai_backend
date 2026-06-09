@@ -31,7 +31,8 @@ const PERSIST_ANSWER_SNAPSHOT =
     .toLowerCase() === "true";
 
 function isEnabled() {
-  return Boolean(GATEWAY_URL);
+  // return Boolean(GATEWAY_URL); // 0G DA disabled
+  return false;
 }
 
 function walletFromPayload(data) {
