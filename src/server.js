@@ -17,6 +17,7 @@ import leaderboardRoutes from "./routes/leaderboardRoutes.js";
 import sessionRoutes from "./routes/sessionRoutes.js";
 import verifyRoutes from "./routes/verifyRoutes.js";
 import daPublicRoutes from "./routes/daPublicRoutes.js";
+import crossGameRoutes from "./routes/crossGameRoutes.js";
 import { logDaGatewayBootHealth } from "./services/daGatewayInspectService.js";
 
 import { warmOnBoot, startBackgroundTopup } from "./lib/warmup.js";
@@ -80,6 +81,7 @@ gameRoutes(app);
 leaderboardRoutes(app);
 verifyRoutes(app);
 daPublicRoutes(app);
+crossGameRoutes(app);
 
 const server = http.createServer(app);
 attachPresenceWS(server);

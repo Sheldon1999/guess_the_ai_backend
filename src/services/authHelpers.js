@@ -8,6 +8,8 @@ const DEBUG_V2_LOGIN = ["1", "true", "yes", "on"].includes(
   String(process.env.DEBUG_V2_LOGIN || "").toLowerCase()
 );
 
+import { withGuessTheAiCrossGame } from '../utils/crossGame.js';
+
 /**
  * Check if value is a plain object
  * @param {*} value - Value to check
@@ -109,7 +111,7 @@ export const createHttpError = (statusCode, message, code) => {
  */
 export const buildUserPayload = (doc, privyMetaData, normalizeWallet) => {
   const walletAddress = normalizeWallet(doc?.walletAddress);
-  return {
+  return withGuessTheAiCrossGame({
     walletAddress,
     username: doc?.username || `Player_${Date.now()}`,
     correctAnswers: Number(doc?.correctAnswers) || 0,
@@ -118,5 +120,5 @@ export const buildUserPayload = (doc, privyMetaData, normalizeWallet) => {
     rank: doc?.rank || "E",
     dungeonTitle: doc?.dungeonTitle || "Newbie",
     privyMetaData: isPlainObject(privyMetaData) ? privyMetaData : doc?.privyMetaData || {}
-  };
+  });
 };

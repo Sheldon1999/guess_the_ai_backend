@@ -15,6 +15,7 @@ import backupAnswerList from '../lib/backup_answer.js';
 import { getTruthLabel } from '../lib/kv.js';
 import { images, users } from '../lib/mongo.js';
 import { normalizeHash, normalizeGuess } from '../utils/normalize.js';
+import { withGuessTheAiCrossGame } from '../utils/crossGame.js';
 
 /**
  * Format user profile for API response
@@ -23,14 +24,14 @@ import { normalizeHash, normalizeGuess } from '../utils/normalize.js';
  */
 function formatProfileResponse(userProfile) {
   if (!userProfile) return null;
-  return {
+  return withGuessTheAiCrossGame({
     username: userProfile.username,
     correctAnswers: userProfile.correctAnswers,
     currentStreak: userProfile.currentStreak,
     streak: userProfile.streak,
     rank: userProfile.rank,
     dungeonTitle: userProfile.dungeonTitle
-  };
+  });
 }
 
 /**

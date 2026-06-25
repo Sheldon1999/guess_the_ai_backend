@@ -13,6 +13,7 @@ import {
   recordGameStart,
   recordGameEnd
 } from '../lib/onchain/index.js';
+import { withGuessTheAiCrossGame } from '../utils/crossGame.js';
 
 /**
  * Get Redis key for session
@@ -186,12 +187,13 @@ export async function endSession(walletAddress, options = {}) {
 async function getUserStats(walletAddress) {
   const userDoc = await users.findOne(
     { walletAddress },
-    { projection: { correctAnswers: 1, currentStreak: 1 } }
+    { projection: { correctAnswers: 1, currentStreak: 1, streak: 1 } }
   );
 
   return {
     correctAnswers: userDoc?.correctAnswers ?? 0,
-    currentStreak: userDoc?.currentStreak ?? 0
+    currentStreak: userDoc?.currentStreak ?? 0,
+    streak: userDoc?.streak ?? 0
   };
 }
 
@@ -227,10 +229,11 @@ function buildEndSessionResponse(session, stats, onchainResult) {
     startedAt: session.startedAt,
     totalGuesses: session.totalGuesses || 0,
     correctGuesses: session.correctGuesses || 0,
-    totals: {
+    totals: withGuessTheAiCrossGame({
       correctAnswers: stats.correctAnswers,
-      currentStreak: stats.currentStreak
-    },
+      currentStreak: stats.currentStreak,
+      streak: stats.streak
+    }),
     onchain: onchainResult?.hash
       ? { transactionHash: onchainResult.hash }
       : null

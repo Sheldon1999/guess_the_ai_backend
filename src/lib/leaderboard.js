@@ -1,4 +1,5 @@
 import { users } from "./mongo.js";
+import { withGuessTheAiCrossGame } from "../utils/crossGame.js";
 
 /**
  * Get all-time leaderboard with pagination
@@ -67,7 +68,7 @@ export async function topAllTime(limit = 10, page = 1, currentWallet = null) {
 
         return {
             success: true,
-            data: leaderboard,
+            data: leaderboard.map(withGuessTheAiCrossGame),
             pagination: {
                 page,
                 limit,

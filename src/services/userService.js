@@ -19,6 +19,7 @@ import {
 import { generatePlayerUsername } from '../utils/crypto.js';
 import { publishDaEvent } from './daGateway.js';
 import { attachContestRewardToProfile } from './highwayHustleContestService.js';
+import { withGuessTheAiCrossGame } from '../utils/crossGame.js';
 
 /**
  * Login or register a user
@@ -329,7 +330,7 @@ export async function getProfile(walletAddress) {
     responseProfile.campaign = cachedGateUser;
   }
 
-  return await attachContestRewardToProfile(responseProfile, walletAddress, {
+  return await attachContestRewardToProfile(withGuessTheAiCrossGame(responseProfile), walletAddress, {
     forceSync: true
   });
 }

@@ -10,6 +10,7 @@ import leaderboardRoutes from './leaderboardRoutes.js';
 import healthRoutes from './health.js';
 import imageRoutes from './image.js';
 import verifyRoutes from './verifyRoutes.js';
+import crossGameRoutes from './crossGameRoutes.js';
 
 /**
  * Register all routes
@@ -23,6 +24,7 @@ export function registerRoutes(app) {
   healthRoutes(app);
   imageRoutes(app);
   verifyRoutes(app);
+  crossGameRoutes(app);
 }
 
 // Export individual route modules for backward compatibility
@@ -33,5 +35,6 @@ export {
   leaderboardRoutes,
   healthRoutes,
   imageRoutes,
-  verifyRoutes
+  verifyRoutes,
+  crossGameRoutes
 };

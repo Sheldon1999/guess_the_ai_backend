@@ -14,6 +14,7 @@ import * as answerService from './answerService.js';
 import { recordModeAnswerOnchain } from './answerService.js';
 import { getRandomTemplate, supportedGameModes } from './gameQuestionConfigService.js';
 import { fireHintGeneration } from './hintService.js';
+import { withGuessTheAiCrossGame } from '../utils/crossGame.js';
 import {
   generateOddOneOutPercentages,
   generateMultiSelectPercentages,
@@ -59,14 +60,14 @@ function toUniqueHashes(list) {
 
 function toProfileResponse(profile) {
   if (!profile) return null;
-  return {
+  return withGuessTheAiCrossGame({
     username: profile.username,
     correctAnswers: profile.correctAnswers,
     currentStreak: profile.currentStreak,
     streak: profile.streak,
     rank: profile.rank,
     dungeonTitle: profile.dungeonTitle
-  };
+  });
 }
 
 function toSafeInt(value) {

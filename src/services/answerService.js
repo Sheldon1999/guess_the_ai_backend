@@ -16,6 +16,7 @@ import { recordAnswerSubmissionHash, recordSeasonScore } from '../lib/onchain/in
 import { toQuestionId, extractTransactionHash } from '../utils/crypto.js';
 import { publishDaAnswerGatewayEvent } from './daGateway.js';
 import { attachContestRewardToResponse } from './highwayHustleContestService.js';
+import { withGuessTheAiCrossGame } from '../utils/crossGame.js';
 
 /**
  * Process a user's answer submission
@@ -104,7 +105,7 @@ function buildAnswerResponse(answerResult, hash, guess) {
     ? correct
     : (truth ? guess === truth : null);
 
-  const profileResponse = formatProfileResponse(profile);
+  const profileResponse = withGuessTheAiCrossGame(formatProfileResponse(profile));
 
   return {
     correct: isCorrect,
@@ -146,7 +147,7 @@ async function updateGateStats(walletAddress, response) {
   await updateGateUserScoreRedis(walletAddress, response.correct);
 
   const updatedGateUser = await getGateUserRedis(walletAddress);
-  response.profile.campaign = formatProfileResponse(updatedGateUser);
+  response.profile.campaign = withGuessTheAiCrossGame(formatProfileResponse(updatedGateUser));
   response.gateStats = updatedGateUser;
 }
 
